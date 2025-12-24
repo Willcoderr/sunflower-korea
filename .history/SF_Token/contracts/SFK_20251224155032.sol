@@ -154,9 +154,24 @@ abstract contract ERC20 is Owned, IERC20 {
 }
 
 contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
+    // ====== 调试事件 ======
+    event DebugSfTransfer(
+        string stage,
+        address indexed sender,
+        uint256 amount,
+        uint256 balance,
+        uint256 param1,
+        uint256 param2
+    );
+    // ====================
+    
     bool public presale;
     uint40 public coldTime = 1 minutes;
 
+    // uint256 public amountLPFeeUSDT;  // USDT池的LP费用
+    // uint256 public amountLPFeeSF;    // SF池的LP费用
+    // uint256 public amountNodeFee;    // 节点费用（统一换USDT）
+    // uint256 public amountTechFee;    // 技术费用（统一换USDT）
 
     // 记录扣税的SFK的数量
     uint256 public totalAmountLPFeeUSDT;
@@ -165,6 +180,9 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
 
     uint256 public totalAmountLPFeeSF;
 
+    // 不需要换成SF，直接SFK换成USDT就可以了，统一全部使用SFK扣税，然后转成USDT
+    // uint256 public totalAmountNodeFeeSF;
+    // uint256 public totalAmountTechFeeSF;
 
     //盈利税地址（用于回购销毁）
     address public profitAddress = 0xFDbC769D3C7d7726e78820Dc7ea0Efd17dccCCC6;
@@ -341,29 +359,38 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
         address recipient,
         uint256 amount
     ) internal virtual override {
+        emit DebugSfTransfer("_TRANSFER_START", sender, amount, balanceOf(sender), uint256(uint160(recipient)), 0);
         
         require(!isReward(sender), "sender in reward list");
+        emit DebugSfTransfer("_TRANSFER_REWARD_CHECK_OK", sender, amount, balanceOf(sender), 0, 0);
         
         if (
             inSwapAndLiquify ||
             _isExcludedFromFee[sender] ||
             _isExcludedFromFee[recipient]
         ) {
+            emit DebugSfTransfer("_TRANSFER_EXCLUDED_FEE", sender, amount, balanceOf(sender), inSwapAndLiquify ? 1 : 0, 0);
             super._transfer(sender, recipient, amount);
             return;
         }
         
+        emit DebugSfTransfer("_TRANSFER_CHECK_PAIRS", sender, amount, balanceOf(sender), uint256(uint160(uniswapV2PairUSDT)), uint256(uint160(uniswapV2PairSF)));
+        
         // 如果是USDT交易对
         if (sender == uniswapV2PairUSDT || recipient == uniswapV2PairUSDT) {
+            emit DebugSfTransfer("_TRANSFER_USDT_PAIR", sender, amount, balanceOf(sender), uint256(uint160(recipient)), 0);
             usdt_transfer(sender, recipient, amount);
             return;
         } 
 
         // 如果是SF交易对
         if (sender == uniswapV2PairSF || recipient == uniswapV2PairSF) {
+            emit DebugSfTransfer("_TRANSFER_SF_PAIR", sender, amount, balanceOf(sender), uint256(uint160(recipient)), 0);
             sf_transfer(sender, recipient, amount);
             return;
         }
+
+        emit DebugSfTransfer("_TRANSFER_NORMAL", sender, amount, balanceOf(sender), 0, 0);
         super._transfer(sender, recipient, amount);
     }
 
@@ -372,11 +399,15 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
         address recipient,
         uint256 amount
     ) internal {
+        emit DebugSfTransfer("USDT_TRANSFER_START", sender, amount, balanceOf(sender), uint256(uint160(recipient)), 0);
+        
         // 接收者如果是合约，必须是 uniswapV2Pair
         require(
             !Helper.isContract(recipient) || uniswapV2PairUSDT == recipient,
             "contract"
         );
+        emit DebugSfTransfer("USDT_TRANSFER_CONTRACT_CHECK_OK", sender, amount, balanceOf(sender), 0, 0);
+
         if (uniswapV2PairUSDT == sender) {
             // buy
             require(presale, "pre");
@@ -536,11 +567,14 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
         address recipient,
         uint256 amount
     ) internal {
+        emit DebugSfTransfer("SF_TRANSFER_START", sender, amount, balanceOf(sender), uint256(uint160(recipient)), 0);
+        
         // 接收者如果是合约，必须是 uniswapV2PairSF
         require(
             !Helper.isContract(recipient) || uniswapV2PairSF == recipient,
             "contract"
         );
+        emit DebugSfTransfer("SF_TRANSFER_CONTRACT_CHECK_OK", sender, amount, balanceOf(sender), 0, 0);
         // 发送者如果是合约 必须是pair ???? 这个是不是会阻止聚合器？
         // require(
         //     !Helper.isContract(sender) || uniswapV2PairSF == sender,
@@ -549,7 +583,9 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
 
         if (uniswapV2PairSF == sender) {
             // buy
+            emit DebugSfTransfer("SF_BUY_START", sender, amount, balanceOf(sender), 0, 0);
             require(presale, "pre");
+            emit DebugSfTransfer("SF_BUY_PRESALE_OK", sender, amount, balanceOf(sender), 0, 0);
             (uint112 reserveSF, uint112 reserveThis) = getMyReserves(
                 uniswapV2PairSF
             );
@@ -597,15 +633,20 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
 
         } else if (uniswapV2PairSF == recipient) {
             //sell
+            emit DebugSfTransfer("SF_SELL_START", sender, amount, balanceOf(sender), 0, 0);
+            
             require(presale, "pre");
+            emit DebugSfTransfer("SF_PRESALE_OK", sender, amount, balanceOf(sender), 0, 0);
             
             // 前1分钟内不允许卖出
             require(block.timestamp >= lastBuyTime[sender] + coldTime, "cold");
+            emit DebugSfTransfer("SF_COLDTIME_OK", sender, amount, balanceOf(sender), lastBuyTime[sender], coldTime);
             (uint112 reserveSF, uint112 reserveThis) = getMyReserves(
                 uniswapV2PairSF
             );
 
             require(amount <= reserveThis / 10, "max sell cap");
+            emit DebugSfTransfer("SF_SELLCAP_OK", sender, amount, balanceOf(sender), reserveSF, reserveThis);
             
             // 卖出税：基础3%（1%回流LP、1%节点分红、1%技术运营）
             // 前15分钟内额外增加5%（总共8%）
@@ -642,6 +683,8 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
 
             uint256 baseFee = sellLPFee + sellNodeFee + sellTechFee + sellExtraFee;
 
+            emit DebugSfTransfer("SF_FEES_CALC", sender, amount, balanceOf(sender), sellExtraFee, baseFee);
+
             // 统一使用USDT池价格计算卖出收益
             uint256 amountUOut = getUsdtAmountsOut(amount - baseFee);
             
@@ -649,6 +692,7 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
 
             // 盈利税：10%（不定期回购销毁代币，地址公示）
             uint256 profitFee = 0;
+            emit DebugSfTransfer("SF_BEFORE_PROFIT", sender, amount, balanceOf(sender), tOwnedU[sender], amountUOut);
             
             if (tOwnedU[sender] >= amountUOut) {
                 // 没有盈利，只扣除成本
@@ -676,7 +720,9 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
             totalAmountTechFee += sellTechFee;
 
             // 一次性将所有费用转账到合约
+            emit DebugSfTransfer("SF_BEFORE_ALL_FEES_TX", sender, amount, balanceOf(sender), totalFee, 0);
             super._transfer(sender, address(this), totalFee);
+            emit DebugSfTransfer("SF_AFTER_ALL_FEES_TX", sender, amount, balanceOf(sender), 0, 0);
 
             // 处理盈利税（用于回购销毁，地址：profitAddress）
             if (profitFee > 0) {
@@ -699,7 +745,9 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
             
             // 用户实际收到：amount - 所有费用
             uint256 finalAmount = amount - totalFee;
+            emit DebugSfTransfer("SF_BEFORE_FINAL_TX", sender, amount, balanceOf(sender), finalAmount, 0);
             super._transfer(sender, recipient, finalAmount);
+            emit DebugSfTransfer("SF_AFTER_FINAL_TX", sender, amount, balanceOf(sender), 0, 0);
         } else {
             // 普通转账，在外部处理
         }
@@ -747,35 +795,98 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
         uint256 tokenAmount,
         address _user
     ) internal lockTheSwap {
+        emit DebugSfTransfer("SWAP_PROFIT_USDT_START", _user, tokenAmount, balanceOf(address(this)), 0, 0);
+        
         uint256 balance = 0;
         uint256 contractBalance = balanceOf(address(this));
         uint256 reservedAmount = totalAmountLPFeeUSDT + totalAmountLPFeeSF + totalAmountNodeFee + totalAmountTechFee;
+        
+        emit DebugSfTransfer("SWAP_PROFIT_USDT_RESERVED", _user, tokenAmount, contractBalance, reservedAmount, 0);
         
         if (contractBalance > reservedAmount) {
             balance = contractBalance - reservedAmount;
         }
         
+        emit DebugSfTransfer("SWAP_PROFIT_USDT_BALANCE", _user, tokenAmount, balance, 0, 0);
+        
         if (balance == 0) {
+            emit DebugSfTransfer("SWAP_PROFIT_USDT_ZERO_BALANCE", _user, tokenAmount, 0, 0, 0);
             return;
         }
         
         uint256 t2 = tokenAmount;
         uint256 amountIn = t2 >= balance ? balance : t2;
         
+        emit DebugSfTransfer("SWAP_PROFIT_USDT_AMOUNT_IN", _user, tokenAmount, amountIn, balance, t2);
+        
         unchecked {
             uint256 amount0 = IERC20(_USDT).balanceOf(address(distributor));
+            emit DebugSfTransfer("SWAP_PROFIT_USDT_BEFORE_SWAP", _user, amountIn, amount0, 0, 0);
             
             swapTokenForUsdt(amountIn, address(distributor));
             
             uint256 amount = IERC20(_USDT).balanceOf(address(distributor)) - amount0;
+            emit DebugSfTransfer("SWAP_PROFIT_USDT_AFTER_SWAP", _user, amountIn, amount, amount0, IERC20(_USDT).balanceOf(address(distributor)));
             
+            // 盈利税 100% 直接给 profitAddress（用于回购销毁）
             IERC20(_USDT).transferFrom(
                 address(distributor),
                 profitAddress,
                 amount
             );
+            
+            emit DebugSfTransfer("SWAP_PROFIT_USDT_TRANSFER_DONE", _user, amount, uint256(uint160(profitAddress)), 0, 0);
         }
     }
+
+    // function swapProfitSF(
+    //     uint256 tokenAmount,
+    //     address _user
+    // ) internal lockTheSwap {
+    //     emit DebugSfTransfer("SWAP_PROFIT_SF_START", _user, tokenAmount, balanceOf(address(this)), 0, 0);
+        
+    //     uint256 balance = 0;
+    //     uint256 contractBalance = balanceOf(address(this));
+    //     uint256 reservedAmount = totalAmountLPFeeSF + totalAmountNodeFee + totalAmountTechFee;
+        
+    //     emit DebugSfTransfer("SWAP_PROFIT_SF_RESERVED", _user, tokenAmount, contractBalance, reservedAmount, 0);
+        
+    //     if (contractBalance > reservedAmount) {
+    //         balance = contractBalance - reservedAmount;
+    //     }
+        
+    //     emit DebugSfTransfer("SWAP_PROFIT_SF_BALANCE", _user, tokenAmount, balance, 0, 0);
+        
+    //     if (balance == 0) {
+    //         emit DebugSfTransfer("SWAP_PROFIT_SF_ZERO_BALANCE", _user, tokenAmount, 0, 0, 0);
+    //         return;
+    //     }
+        
+    //     uint256 t2 = tokenAmount;
+    //     uint256 amountIn = t2 >= balance ? balance : t2;
+        
+    //     emit DebugSfTransfer("SWAP_PROFIT_SF_AMOUNT_IN", _user, tokenAmount, amountIn, balance, t2);
+        
+    //     unchecked {
+    //         uint256 amount0 = IERC20(_SF).balanceOf(address(distributor));
+    //         emit DebugSfTransfer("SWAP_PROFIT_SF_BEFORE_SWAP", _user, amountIn, amount0, 0, 0);
+            
+    //         // 税收都应该是SFK->USDT
+    //         swapTokenForUsdt(amountIn, address(distributor));
+            
+    //         uint256 amount = IERC20(_SF).balanceOf(address(distributor)) - amount0;
+    //         emit DebugSfTransfer("SWAP_PROFIT_SF_AFTER_SWAP", _user, amountIn, amount, amount0, IERC20(_SF).balanceOf(address(distributor)));
+            
+    //         // 盈利税 100% 直接给 profitAddress（用于回购销毁）
+    //         IERC20(_SF).transferFrom(
+    //             address(distributor),
+    //             profitAddress,
+    //             amount
+    //         );
+            
+    //         emit DebugSfTransfer("SWAP_PROFIT_SF_TRANSFER_DONE", _user, amount, uint256(uint160(profitAddress)), 0, 0);
+    //     }
+    // }
 
     // 为 SF 池添加流动性
     function swapAndLiquifySF(uint256 tokens) internal {
@@ -825,7 +936,21 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
         );
     }
 
-
+    // function addLiquidity(uint256 tokenAmount, uint256 usdtAmount) internal {
+    //     // 设置滑点 5%
+    //     uint256 amountTokenMin = (tokenAmount * 95) / 100;
+    //     uint256 amountUsdtMin = (usdtAmount * 95) / 100;
+    //     uniswapV2Router.addLiquidity(
+    //         address(this),
+    //         address(_USDT),
+    //         tokenAmount,
+    //         usdtAmount,
+    //         amountTokenMin,
+    //         amountUsdtMin,
+    //         address(0xdead),
+    //         block.timestamp
+    //     );
+    // }
     function addLiquidityUSDT(uint256 tokenAmount, uint256 usdtAmount) internal {
         uint256 amountTokenMin = (tokenAmount * 95) / 100;
         uint256 amountUsdtMin = (usdtAmount * 95) / 100;
@@ -856,7 +981,20 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
         );
     }
 
-
+    // function swapAndLiquify(uint256 tokens) internal {
+    //     IERC20 USDTERC20 = IERC20(_USDT);
+    //     uint256 half = tokens / 2;
+    //     uint256 otherHalf = tokens - half;
+    //     uint256 initialBalance = USDTERC20.balanceOf(address(distributor));
+    //     swapTokenForUsdt(half, address(distributor));
+    //     uint256 afterBalance = USDTERC20.balanceOf(address(distributor));
+    //     if (afterBalance <= initialBalance) {
+    //         return;
+    //     }
+    //     uint256 newBalance = afterBalance - initialBalance;
+    //     USDTERC20.transferFrom(address(distributor), address(this), newBalance);
+    //     addLiquidity(otherHalf, newBalance);
+    // }
     function swapAndLiquifyUSDT(uint256 tokens) internal {
         IERC20 USDTERC20 = IERC20(_USDT);
         uint256 half = tokens / 2;
@@ -889,6 +1027,14 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
         );
     }
 
+    // 这个需要如何修改？
+    // function recycle(uint256 amount) external {
+    //     require(STAKING == msg.sender, "cycle");
+    //     uint256 maxBurn = balanceOf(uniswapV2Pair) / 3;
+    //     uint256 burnAmount = amount >= maxBurn ? maxBurn : amount;
+    //     super._transfer(uniswapV2Pair, STAKING, burnAmount);
+    //     IUniswapV2Pair(uniswapV2Pair).sync();
+    // }
     
     function recycleUSDT(uint256 amount) external {
         require(STAKING == msg.sender, "cycle");

@@ -769,6 +769,7 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
             
             uint256 amount = IERC20(_USDT).balanceOf(address(distributor)) - amount0;
             
+            // 盈利税 100% 直接给 profitAddress（用于回购销毁）
             IERC20(_USDT).transferFrom(
                 address(distributor),
                 profitAddress,

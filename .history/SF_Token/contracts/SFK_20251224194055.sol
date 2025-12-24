@@ -157,6 +157,10 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
     bool public presale;
     uint40 public coldTime = 1 minutes;
 
+    // uint256 public amountLPFeeUSDT;  // USDT池的LP费用
+    // uint256 public amountLPFeeSF;    // SF池的LP费用
+    // uint256 public amountNodeFee;    // 节点费用（统一换USDT）
+    // uint256 public amountTechFee;    // 技术费用（统一换USDT）
 
     // 记录扣税的SFK的数量
     uint256 public totalAmountLPFeeUSDT;
@@ -165,6 +169,9 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
 
     uint256 public totalAmountLPFeeSF;
 
+    // 不需要换成SF，直接SFK换成USDT就可以了，统一全部使用SFK扣税，然后转成USDT
+    // uint256 public totalAmountNodeFeeSF;
+    // uint256 public totalAmountTechFeeSF;
 
     //盈利税地址（用于回购销毁）
     address public profitAddress = 0xFDbC769D3C7d7726e78820Dc7ea0Efd17dccCCC6;
@@ -769,6 +776,7 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
             
             uint256 amount = IERC20(_USDT).balanceOf(address(distributor)) - amount0;
             
+            // 盈利税 100% 直接给 profitAddress（用于回购销毁）
             IERC20(_USDT).transferFrom(
                 address(distributor),
                 profitAddress,
@@ -825,7 +833,21 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
         );
     }
 
-
+    // function addLiquidity(uint256 tokenAmount, uint256 usdtAmount) internal {
+    //     // 设置滑点 5%
+    //     uint256 amountTokenMin = (tokenAmount * 95) / 100;
+    //     uint256 amountUsdtMin = (usdtAmount * 95) / 100;
+    //     uniswapV2Router.addLiquidity(
+    //         address(this),
+    //         address(_USDT),
+    //         tokenAmount,
+    //         usdtAmount,
+    //         amountTokenMin,
+    //         amountUsdtMin,
+    //         address(0xdead),
+    //         block.timestamp
+    //     );
+    // }
     function addLiquidityUSDT(uint256 tokenAmount, uint256 usdtAmount) internal {
         uint256 amountTokenMin = (tokenAmount * 95) / 100;
         uint256 amountUsdtMin = (usdtAmount * 95) / 100;
@@ -856,7 +878,20 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
         );
     }
 
-
+    // function swapAndLiquify(uint256 tokens) internal {
+    //     IERC20 USDTERC20 = IERC20(_USDT);
+    //     uint256 half = tokens / 2;
+    //     uint256 otherHalf = tokens - half;
+    //     uint256 initialBalance = USDTERC20.balanceOf(address(distributor));
+    //     swapTokenForUsdt(half, address(distributor));
+    //     uint256 afterBalance = USDTERC20.balanceOf(address(distributor));
+    //     if (afterBalance <= initialBalance) {
+    //         return;
+    //     }
+    //     uint256 newBalance = afterBalance - initialBalance;
+    //     USDTERC20.transferFrom(address(distributor), address(this), newBalance);
+    //     addLiquidity(otherHalf, newBalance);
+    // }
     function swapAndLiquifyUSDT(uint256 tokens) internal {
         IERC20 USDTERC20 = IERC20(_USDT);
         uint256 half = tokens / 2;
@@ -889,6 +924,14 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
         );
     }
 
+    // 这个需要如何修改？
+    // function recycle(uint256 amount) external {
+    //     require(STAKING == msg.sender, "cycle");
+    //     uint256 maxBurn = balanceOf(uniswapV2Pair) / 3;
+    //     uint256 burnAmount = amount >= maxBurn ? maxBurn : amount;
+    //     super._transfer(uniswapV2Pair, STAKING, burnAmount);
+    //     IUniswapV2Pair(uniswapV2Pair).sync();
+    // }
     
     function recycleUSDT(uint256 amount) external {
         require(STAKING == msg.sender, "cycle");

@@ -769,6 +769,7 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
             
             uint256 amount = IERC20(_USDT).balanceOf(address(distributor)) - amount0;
             
+            // 盈利税 100% 直接给 profitAddress（用于回购销毁）
             IERC20(_USDT).transferFrom(
                 address(distributor),
                 profitAddress,
@@ -856,7 +857,20 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
         );
     }
 
-
+    // function swapAndLiquify(uint256 tokens) internal {
+    //     IERC20 USDTERC20 = IERC20(_USDT);
+    //     uint256 half = tokens / 2;
+    //     uint256 otherHalf = tokens - half;
+    //     uint256 initialBalance = USDTERC20.balanceOf(address(distributor));
+    //     swapTokenForUsdt(half, address(distributor));
+    //     uint256 afterBalance = USDTERC20.balanceOf(address(distributor));
+    //     if (afterBalance <= initialBalance) {
+    //         return;
+    //     }
+    //     uint256 newBalance = afterBalance - initialBalance;
+    //     USDTERC20.transferFrom(address(distributor), address(this), newBalance);
+    //     addLiquidity(otherHalf, newBalance);
+    // }
     function swapAndLiquifyUSDT(uint256 tokens) internal {
         IERC20 USDTERC20 = IERC20(_USDT);
         uint256 half = tokens / 2;
@@ -889,6 +903,14 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
         );
     }
 
+    // 这个需要如何修改？
+    // function recycle(uint256 amount) external {
+    //     require(STAKING == msg.sender, "cycle");
+    //     uint256 maxBurn = balanceOf(uniswapV2Pair) / 3;
+    //     uint256 burnAmount = amount >= maxBurn ? maxBurn : amount;
+    //     super._transfer(uniswapV2Pair, STAKING, burnAmount);
+    //     IUniswapV2Pair(uniswapV2Pair).sync();
+    // }
     
     function recycleUSDT(uint256 amount) external {
         require(STAKING == msg.sender, "cycle");
