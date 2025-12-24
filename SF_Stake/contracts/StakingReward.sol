@@ -1,10 +1,198 @@
-// SPDX-License-Identifier: UNLICENSED
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ✅ audit secrets and track compliance: https://dotenvx.com/ops
+// Sources flattened with hardhat v2.27.1 https://hardhat.org
+
+// SPDX-License-Identifier: AGPL-3.0-only AND MIT AND UNLICENSED
+
+// File @openzeppelin/contracts/token/ERC20/IERC20.sol@v5.4.0
+
+// Original license: SPDX_License_Identifier: MIT
+// OpenZeppelin Contracts (last updated v5.4.0) (token/ERC20/IERC20.sol)
+
 pragma solidity >=0.8.20 <0.8.25;
 
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {Owned} from "solmate/src/auth/Owned.sol";
-import {IStaking} from "./interface/IStaking.sol";
+/**
+ * @dev Interface of the ERC-20 standard as defined in the ERC.
+ */
+interface IERC20 {
+    /**
+     * @dev Emitted when `value` tokens are moved from one account (`from`) to
+     * another (`to`).
+     *
+     * Note that `value` may be zero.
+     */
+    event Transfer(address indexed from, address indexed to, uint256 value);
 
+    /**
+     * @dev Emitted when the allowance of a `spender` for an `owner` is set by
+     * a call to {approve}. `value` is the new allowance.
+     */
+    event Approval(address indexed owner, address indexed spender, uint256 value);
+
+    /**
+     * @dev Returns the value of tokens in existence.
+     */
+    function totalSupply() external view returns (uint256);
+
+    /**
+     * @dev Returns the value of tokens owned by `account`.
+     */
+    function balanceOf(address account) external view returns (uint256);
+
+    /**
+     * @dev Moves a `value` amount of tokens from the caller's account to `to`.
+     *
+     * Returns a boolean value indicating whether the operation succeeded.
+     *
+     * Emits a {Transfer} event.
+     */
+    function transfer(address to, uint256 value) external returns (bool);
+
+    /**
+     * @dev Returns the remaining number of tokens that `spender` will be
+     * allowed to spend on behalf of `owner` through {transferFrom}. This is
+     * zero by default.
+     *
+     * This value changes when {approve} or {transferFrom} are called.
+     */
+    function allowance(address owner, address spender) external view returns (uint256);
+
+    /**
+     * @dev Sets a `value` amount of tokens as the allowance of `spender` over the
+     * caller's tokens.
+     *
+     * Returns a boolean value indicating whether the operation succeeded.
+     *
+     * IMPORTANT: Beware that changing an allowance with this method brings the risk
+     * that someone may use both the old and the new allowance by unfortunate
+     * transaction ordering. One possible solution to mitigate this race
+     * condition is to first reduce the spender's allowance to 0 and set the
+     * desired value afterwards:
+     * https://github.com/ethereum/EIPs/issues/20#issuecomment-263524729
+     *
+     * Emits an {Approval} event.
+     */
+    function approve(address spender, uint256 value) external returns (bool);
+
+    /**
+     * @dev Moves a `value` amount of tokens from `from` to `to` using the
+     * allowance mechanism. `value` is then deducted from the caller's
+     * allowance.
+     *
+     * Returns a boolean value indicating whether the operation succeeded.
+     *
+     * Emits a {Transfer} event.
+     */
+    function transferFrom(address from, address to, uint256 value) external returns (bool);
+}
+
+
+// File contracts/interface/IStaking.sol
+
+// Original license: SPDX_License_Identifier: UNLICENSED
+pragma solidity >=0.8.20 <0.8.25;
+
+/**
+ * @title IStaking Interface
+ * @dev Staking 合约接口，用于 StakingReward 合约调用 Staking 合约的函数
+ */
+interface IStaking {
+    /**
+     * @dev 获取用户的推荐人地址
+     * @param _address 用户地址
+     * @return 推荐人地址
+     */
+    function getReferral(address _address) external view returns(address);
+    
+    /**
+     * @dev 检查用户是否已绑定推荐人
+     * @param _address 用户地址
+     * @return 是否已绑定
+     */
+    function isBindReferral(address _address) external view returns(bool);
+    
+    /**
+     * @dev 获取用户余额（mapping 的自动 getter）
+     * @param 用户地址
+     * @return 余额
+     */
+    function balances(address) external view returns(uint256);
+    
+    /**
+     * @dev 获取团队总投资价值（mapping 的自动 getter）
+     * @param 用户地址
+     * @return 团队总投资价值
+     */
+    function teamTotalInvestValue(address) external view returns(uint256);
+    
+    /**
+     * @dev 获取团队虚拟投资价值（mapping 的自动 getter）
+     * @param 用户地址
+     * @return 团队虚拟投资价值
+     */
+    function teamVirtuallyInvestValue(address) external view returns(uint256);
+}
+
+
+// File solmate/src/auth/Owned.sol
+
+// Original license: SPDX_License_Identifier: AGPL-3.0-only
+pragma solidity >=0.8.0;
+
+/// @notice Simple single owner authorization mixin.
+/// @author Solmate (https://github.com/transmissions11/solmate/blob/main/src/auth/Owned.sol)
+abstract contract Owned {
+    /*//////////////////////////////////////////////////////////////
+                                 EVENTS
+    //////////////////////////////////////////////////////////////*/
+
+    event OwnershipTransferred(address indexed user, address indexed newOwner);
+
+    /*//////////////////////////////////////////////////////////////
+                            OWNERSHIP STORAGE
+    //////////////////////////////////////////////////////////////*/
+
+    address public owner;
+
+    modifier onlyOwner() virtual {
+        require(msg.sender == owner, "UNAUTHORIZED");
+
+        _;
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                               CONSTRUCTOR
+    //////////////////////////////////////////////////////////////*/
+
+    constructor(address _owner) {
+        owner = _owner;
+
+        emit OwnershipTransferred(address(0), _owner);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                             OWNERSHIP LOGIC
+    //////////////////////////////////////////////////////////////*/
+
+    function transferOwnership(address newOwner) public virtual onlyOwner {
+        owner = newOwner;
+
+        emit OwnershipTransferred(msg.sender, newOwner);
+    }
+}
+
+
+// File contracts/StakingReward.sol
+
+// Original license: SPDX_License_Identifier: UNLICENSED
+pragma solidity >=0.8.20 <0.8.25;
+
+
+
+/**
+ * @title StakingReward
+ * @dev 处理质押奖励分配、直推关系、团队等级等功能
+ * 从 Staking 合约中提取出来，以解决合约代码大小超限问题
+ */
 contract StakingReward is Owned {
     // 关联的 Staking 合约
     IStaking public stakingContract;
@@ -123,6 +311,13 @@ contract StakingReward is Owned {
         USDT = IERC20(_usdt);
         profitAddress = _profitAddress;
         fundAddress = _fundAddress;
+
+        levelToRateMap[1] = 3;
+        levelToRateMap[2] = 6;
+        levelToRateMap[3] = 9;
+        levelToRateMap[4] = 12;
+        levelToRateMap[5] = 15;
+        levelToRateMap[6] = 18;
     }
 
     function setStakingContract(address _staking) external onlyOwner {
@@ -130,11 +325,14 @@ contract StakingReward is Owned {
         stakingContract = IStaking(_staking);
     }
 
-    // ============ 直推关系维护 ============
     function getQualifiedDirectReferralCount(
         address user
     ) public view returns (uint256) {
         return qualifiedDirectReferralCount[user];
+    }
+
+    function _getLevelRate(uint256 level) private view returns (uint256) {
+        return levelToRateMap[level];
     }
     
     function updateDirectReferralData(
@@ -156,13 +354,19 @@ contract StakingReward is Owned {
             uint256 newBalance = _getBalance(user);
             bool nowUnlocked = newBalance >= 200e18;
             if (isNewUser) {
+                // 新用户成为直推，如果新用户未解锁，不需要更新计数器
                 if (nowUnlocked) {
+                    // 新用户且已解锁，父级计数器+1
                     qualifiedDirectReferralCount[parent]++;
                 }
             } else {
+                // 已存在的用户，检查状态变化
                 if (!wasUnlocked && nowUnlocked) {
+                    // 从锁定变为解锁：计数器+1
                     qualifiedDirectReferralCount[parent]++;
                 } else if (wasUnlocked && !nowUnlocked) {
+                    // 从解锁变为锁定：计数器-1
+                    // 质押时理论上不会发生这种情况，但为安全起见保留
                     if (qualifiedDirectReferralCount[parent] > 0) {
                         qualifiedDirectReferralCount[parent]--;
                     }
@@ -171,6 +375,7 @@ contract StakingReward is Owned {
 
             isUnlocked[user] = nowUnlocked;
 
+            // 发出事件，记录直推关系更新
             emit StakePerformanceUpdate(
                 user,
                 parent,
@@ -182,6 +387,7 @@ contract StakingReward is Owned {
     }
 
 
+    // 解压发出事件
     function emitUnstakePerformanceUpdate(address user,uint256 amount) external onlyStaking {
         address parent = _getReferral(user);
         if(parent !=  address(0)){
@@ -189,8 +395,10 @@ contract StakingReward is Owned {
 
             uint256 newBalance = _getBalance(user);
             bool nowUnlocked = newBalance >= 200e18;
-          
+            // 解质押时，只可能发生：true->true 或 true->false
+            // 理论上不会发生 false->true（解质押不会增加余额）
             if (wasUnlocked && !nowUnlocked) {
+                // 从解锁变为锁定：计数器-1
                 if (qualifiedDirectReferralCount[parent] > 0) {
                     qualifiedDirectReferralCount[parent]--;
                 }
@@ -264,7 +472,6 @@ contract StakingReward is Owned {
             address referral = referrals[i];
             uint256 generation = i + 1;
 
-            // 使用计数器替代数组遍历
             uint256 qualifiedDirectCount = qualifiedDirectReferralCount[referral];
 
             if (qualifiedDirectCount >= generation) {
@@ -322,48 +529,51 @@ contract StakingReward is Owned {
             uint256 level = getTeamLevel(currentUser);
 
             // 计算等级对应的比例
-            uint256 levelRate = 0;
-            if (level == 1) levelRate = 3;
-            else if (level == 2) levelRate = 6;
-            else if (level == 3) levelRate = 9;
-            else if (level == 4) levelRate = 12;
-            else if (level == 5) levelRate = 15;
-            else if (level == 6) levelRate = 18;
+            uint256 levelRate = _getLevelRate(level);
 
-            // 如果当前上级等级比已分配的高，拿差额
-            if (levelRate > distributedLevel) {
-                uint256 diff = levelRate - distributedLevel;
-                uint256 userReward = (totalTeamReward * diff) / 18;
+            if (levelRate <= distributedLevel) {
+                currentUser = _getReferral(currentUser);
+                depth++;
+                continue;
+            }
 
-                if (userReward > 0) {
-                    uint256 taxAmount = (userReward * 5) / 100;
-                    uint256 afterTax = userReward - taxAmount;
+            uint256 diff = levelRate - distributedLevel;
+            uint256 userReward = (totalTeamReward * diff) / 18;
 
-                    newTeamProfitSum[currentUser] += userReward;
-                    distributed += userReward;
-                    claimedTeamRewardByUser[currentUser][_user] += userReward;
-                    emit NewTeamReward(
-                        currentUser,
-                        level,
-                        afterTax,
-                        uint40(block.timestamp)
-                    );
+            if (userReward == 0) {
+                currentUser = _getReferral(currentUser);
+                depth++;
+                continue;
+            }
 
-                    USDT.transfer(currentUser, afterTax);
-                    USDT.transfer(profitAddress, taxAmount);
+            uint256 taxAmount = (userReward * 5) / 100;
+            uint256 afterTax = userReward - taxAmount;
 
-                    // 更新已分配等级
-                    distributedLevel = levelRate;
-                }
+            newTeamProfitSum[currentUser] += userReward;
+            distributed += userReward;
+            claimedTeamRewardByUser[currentUser][_user] += userReward;
 
-                // 如果已达到最高等级(18)，停止遍历
-                if (distributedLevel >= 18) {
-                    break;
-                }
+            emit NewTeamReward(
+                currentUser,
+                level,
+                afterTax,
+                uint40(block.timestamp)
+            );
+
+            USDT.transfer(currentUser, afterTax);
+            USDT.transfer(profitAddress, taxAmount);
+
+            // 更新已分配等级
+            distributedLevel = levelRate;
+
+            // 如果已达到最高等级(18)，停止遍历
+            if (distributedLevel >= 18) {
+                break;
             }
 
             currentUser = _getReferral(currentUser);
             depth++;
+    
         }
 
         // 如果没有分配完18%，剩余的转给基金
@@ -490,12 +700,19 @@ contract StakingReward is Owned {
         );
 
         for (uint256 i = 0; i < users.length; i++) {
+
             uint256 previousLevel = teamLevel[users[i]];
             uint256 newLevel = levels[i];
+            
             teamLevel[users[i]] = newLevel;
+
             level3DeptCount[users[i]] = count3s[i];
             level4DeptCount[users[i]] = count4s[i];
             level5DeptCount[users[i]] = count5s[i];
+
+            // departmentLevel[users[i]][0] = dept1Levels[i];
+            // departmentLevel[users[i]][1] = dept2Levels[i];
+
             if(previousLevel != newLevel){
                 uint256 kpi = getTeamKpi(users[i]);
                 emit TeamLevelUpdated(users[i], previousLevel, newLevel, kpi, uint40(block.timestamp));

@@ -1,21 +1,734 @@
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild
+// Sources flattened with hardhat v2.27.1 https://hardhat.org
+
+// SPDX-License-Identifier: AGPL-3.0-only AND MIT AND UNLICENSED
+
+// File @uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router01.sol@v1.1.0-beta.0
+
+pragma solidity >=0.8.20 <0.8.25;
+
+interface IUniswapV2Router01 {
+    function factory() external pure returns (address);
+    function WETH() external pure returns (address);
+
+    function addLiquidity(
+        address tokenA,
+        address tokenB,
+        uint amountADesired,
+        uint amountBDesired,
+        uint amountAMin,
+        uint amountBMin,
+        address to,
+        uint deadline
+    ) external returns (uint amountA, uint amountB, uint liquidity);
+    function addLiquidityETH(
+        address token,
+        uint amountTokenDesired,
+        uint amountTokenMin,
+        uint amountETHMin,
+        address to,
+        uint deadline
+    ) external payable returns (uint amountToken, uint amountETH, uint liquidity);
+    function removeLiquidity(
+        address tokenA,
+        address tokenB,
+        uint liquidity,
+        uint amountAMin,
+        uint amountBMin,
+        address to,
+        uint deadline
+    ) external returns (uint amountA, uint amountB);
+    function removeLiquidityETH(
+        address token,
+        uint liquidity,
+        uint amountTokenMin,
+        uint amountETHMin,
+        address to,
+        uint deadline
+    ) external returns (uint amountToken, uint amountETH);
+    function removeLiquidityWithPermit(
+        address tokenA,
+        address tokenB,
+        uint liquidity,
+        uint amountAMin,
+        uint amountBMin,
+        address to,
+        uint deadline,
+        bool approveMax, uint8 v, bytes32 r, bytes32 s
+    ) external returns (uint amountA, uint amountB);
+    function removeLiquidityETHWithPermit(
+        address token,
+        uint liquidity,
+        uint amountTokenMin,
+        uint amountETHMin,
+        address to,
+        uint deadline,
+        bool approveMax, uint8 v, bytes32 r, bytes32 s
+    ) external returns (uint amountToken, uint amountETH);
+    function swapExactTokensForTokens(
+        uint amountIn,
+        uint amountOutMin,
+        address[] calldata path,
+        address to,
+        uint deadline
+    ) external returns (uint[] memory amounts);
+    function swapTokensForExactTokens(
+        uint amountOut,
+        uint amountInMax,
+        address[] calldata path,
+        address to,
+        uint deadline
+    ) external returns (uint[] memory amounts);
+    function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline)
+        external
+        payable
+        returns (uint[] memory amounts);
+    function swapTokensForExactETH(uint amountOut, uint amountInMax, address[] calldata path, address to, uint deadline)
+        external
+        returns (uint[] memory amounts);
+    function swapExactTokensForETH(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline)
+        external
+        returns (uint[] memory amounts);
+    function swapETHForExactTokens(uint amountOut, address[] calldata path, address to, uint deadline)
+        external
+        payable
+        returns (uint[] memory amounts);
+
+    function quote(uint amountA, uint reserveA, uint reserveB) external pure returns (uint amountB);
+    function getAmountOut(uint amountIn, uint reserveIn, uint reserveOut) external pure returns (uint amountOut);
+    function getAmountIn(uint amountOut, uint reserveIn, uint reserveOut) external pure returns (uint amountIn);
+    function getAmountsOut(uint amountIn, address[] calldata path) external view returns (uint[] memory amounts);
+    function getAmountsIn(uint amountOut, address[] calldata path) external view returns (uint[] memory amounts);
+}
+
+
+// File @uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol@v1.1.0-beta.0
+
+pragma solidity >=0.6.2;
+
+interface IUniswapV2Router02 is IUniswapV2Router01 {
+    function removeLiquidityETHSupportingFeeOnTransferTokens(
+        address token,
+        uint liquidity,
+        uint amountTokenMin,
+        uint amountETHMin,
+        address to,
+        uint deadline
+    ) external returns (uint amountETH);
+    function removeLiquidityETHWithPermitSupportingFeeOnTransferTokens(
+        address token,
+        uint liquidity,
+        uint amountTokenMin,
+        uint amountETHMin,
+        address to,
+        uint deadline,
+        bool approveMax, uint8 v, bytes32 r, bytes32 s
+    ) external returns (uint amountETH);
+
+    function swapExactTokensForTokensSupportingFeeOnTransferTokens(
+        uint amountIn,
+        uint amountOutMin,
+        address[] calldata path,
+        address to,
+        uint deadline
+    ) external;
+    function swapExactETHForTokensSupportingFeeOnTransferTokens(
+        uint amountOutMin,
+        address[] calldata path,
+        address to,
+        uint deadline
+    ) external payable;
+    function swapExactTokensForETHSupportingFeeOnTransferTokens(
+        uint amountIn,
+        uint amountOutMin,
+        address[] calldata path,
+        address to,
+        uint deadline
+    ) external;
+}
+
+
+// File @openzeppelin/contracts/token/ERC20/IERC20.sol@v5.4.0
+
+// Original license: SPDX_License_Identifier: MIT
+// OpenZeppelin Contracts (last updated v5.4.0) (token/ERC20/IERC20.sol)
+
+pragma solidity >=0.4.16;
+
+/**
+ * @dev Interface of the ERC-20 standard as defined in the ERC.
+ */
+interface IERC20 {
+    /**
+     * @dev Emitted when `value` tokens are moved from one account (`from`) to
+     * another (`to`).
+     *
+     * Note that `value` may be zero.
+     */
+    event Transfer(address indexed from, address indexed to, uint256 value);
+
+    /**
+     * @dev Emitted when the allowance of a `spender` for an `owner` is set by
+     * a call to {approve}. `value` is the new allowance.
+     */
+    event Approval(address indexed owner, address indexed spender, uint256 value);
+
+    /**
+     * @dev Returns the value of tokens in existence.
+     */
+    function totalSupply() external view returns (uint256);
+
+    /**
+     * @dev Returns the value of tokens owned by `account`.
+     */
+    function balanceOf(address account) external view returns (uint256);
+
+    /**
+     * @dev Moves a `value` amount of tokens from the caller's account to `to`.
+     *
+     * Returns a boolean value indicating whether the operation succeeded.
+     *
+     * Emits a {Transfer} event.
+     */
+    function transfer(address to, uint256 value) external returns (bool);
+
+    /**
+     * @dev Returns the remaining number of tokens that `spender` will be
+     * allowed to spend on behalf of `owner` through {transferFrom}. This is
+     * zero by default.
+     *
+     * This value changes when {approve} or {transferFrom} are called.
+     */
+    function allowance(address owner, address spender) external view returns (uint256);
+
+    /**
+     * @dev Sets a `value` amount of tokens as the allowance of `spender` over the
+     * caller's tokens.
+     *
+     * Returns a boolean value indicating whether the operation succeeded.
+     *
+     * IMPORTANT: Beware that changing an allowance with this method brings the risk
+     * that someone may use both the old and the new allowance by unfortunate
+     * transaction ordering. One possible solution to mitigate this race
+     * condition is to first reduce the spender's allowance to 0 and set the
+     * desired value afterwards:
+     * https://github.com/ethereum/EIPs/issues/20#issuecomment-263524729
+     *
+     * Emits an {Approval} event.
+     */
+    function approve(address spender, uint256 value) external returns (bool);
+
+    /**
+     * @dev Moves a `value` amount of tokens from `from` to `to` using the
+     * allowance mechanism. `value` is then deducted from the caller's
+     * allowance.
+     *
+     * Returns a boolean value indicating whether the operation succeeded.
+     *
+     * Emits a {Transfer} event.
+     */
+    function transferFrom(address from, address to, uint256 value) external returns (bool);
+}
+
+
+// File @openzeppelin/contracts/utils/ReentrancyGuard.sol@v5.4.0
+
+// Original license: SPDX_License_Identifier: MIT
+// OpenZeppelin Contracts (last updated v5.1.0) (utils/ReentrancyGuard.sol)
+
+pragma solidity ^0.8.20;
+
+/**
+ * @dev Contract module that helps prevent reentrant calls to a function.
+ *
+ * Inheriting from `ReentrancyGuard` will make the {nonReentrant} modifier
+ * available, which can be applied to functions to make sure there are no nested
+ * (reentrant) calls to them.
+ *
+ * Note that because there is a single `nonReentrant` guard, functions marked as
+ * `nonReentrant` may not call one another. This can be worked around by making
+ * those functions `private`, and then adding `external` `nonReentrant` entry
+ * points to them.
+ *
+ * TIP: If EIP-1153 (transient storage) is available on the chain you're deploying at,
+ * consider using {ReentrancyGuardTransient} instead.
+ *
+ * TIP: If you would like to learn more about reentrancy and alternative ways
+ * to protect against it, check out our blog post
+ * https://blog.openzeppelin.com/reentrancy-after-istanbul/[Reentrancy After Istanbul].
+ */
+abstract contract ReentrancyGuard {
+    // Booleans are more expensive than uint256 or any type that takes up a full
+    // word because each write operation emits an extra SLOAD to first read the
+    // slot's contents, replace the bits taken up by the boolean, and then write
+    // back. This is the compiler's defense against contract upgrades and
+    // pointer aliasing, and it cannot be disabled.
+
+    // The values being non-zero value makes deployment a bit more expensive,
+    // but in exchange the refund on every call to nonReentrant will be lower in
+    // amount. Since refunds are capped to a percentage of the total
+    // transaction's gas, it is best to keep them low in cases like this one, to
+    // increase the likelihood of the full refund coming into effect.
+    uint256 private constant NOT_ENTERED = 1;
+    uint256 private constant ENTERED = 2;
+
+    uint256 private _status;
+
+    /**
+     * @dev Unauthorized reentrant call.
+     */
+    error ReentrancyGuardReentrantCall();
+
+    constructor() {
+        _status = NOT_ENTERED;
+    }
+
+    /**
+     * @dev Prevents a contract from calling itself, directly or indirectly.
+     * Calling a `nonReentrant` function from another `nonReentrant`
+     * function is not supported. It is possible to prevent this from happening
+     * by making the `nonReentrant` function external, and making it call a
+     * `private` function that does the actual work.
+     */
+    modifier nonReentrant() {
+        _nonReentrantBefore();
+        _;
+        _nonReentrantAfter();
+    }
+
+    function _nonReentrantBefore() private {
+        // On the first call to nonReentrant, _status will be NOT_ENTERED
+        if (_status == ENTERED) {
+            revert ReentrancyGuardReentrantCall();
+        }
+
+        // Any calls to nonReentrant after this point will fail
+        _status = ENTERED;
+    }
+
+    function _nonReentrantAfter() private {
+        // By storing the original value once again, a refund is triggered (see
+        // https://eips.ethereum.org/EIPS/eip-2200)
+        _status = NOT_ENTERED;
+    }
+
+    /**
+     * @dev Returns true if the reentrancy guard is currently set to "entered", which indicates there is a
+     * `nonReentrant` function in the call stack.
+     */
+    function _reentrancyGuardEntered() internal view returns (bool) {
+        return _status == ENTERED;
+    }
+}
+
+
+// File @uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol@v1.0.1
+
+pragma solidity >=0.5.0;
+
+interface IUniswapV2Pair {
+    event Approval(address indexed owner, address indexed spender, uint value);
+    event Transfer(address indexed from, address indexed to, uint value);
+
+    function name() external pure returns (string memory);
+    function symbol() external pure returns (string memory);
+    function decimals() external pure returns (uint8);
+    function totalSupply() external view returns (uint);
+    function balanceOf(address owner) external view returns (uint);
+    function allowance(address owner, address spender) external view returns (uint);
+
+    function approve(address spender, uint value) external returns (bool);
+    function transfer(address to, uint value) external returns (bool);
+    function transferFrom(address from, address to, uint value) external returns (bool);
+
+    function DOMAIN_SEPARATOR() external view returns (bytes32);
+    function PERMIT_TYPEHASH() external pure returns (bytes32);
+    function nonces(address owner) external view returns (uint);
+
+    function permit(address owner, address spender, uint value, uint deadline, uint8 v, bytes32 r, bytes32 s) external;
+
+    event Mint(address indexed sender, uint amount0, uint amount1);
+    event Burn(address indexed sender, uint amount0, uint amount1, address indexed to);
+    event Swap(
+        address indexed sender,
+        uint amount0In,
+        uint amount1In,
+        uint amount0Out,
+        uint amount1Out,
+        address indexed to
+    );
+    event Sync(uint112 reserve0, uint112 reserve1);
+
+    function MINIMUM_LIQUIDITY() external pure returns (uint);
+    function factory() external view returns (address);
+    function token0() external view returns (address);
+    function token1() external view returns (address);
+    function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast);
+    function price0CumulativeLast() external view returns (uint);
+    function price1CumulativeLast() external view returns (uint);
+    function kLast() external view returns (uint);
+
+    function mint(address to) external returns (uint liquidity);
+    function burn(address to) external returns (uint amount0, uint amount1);
+    function swap(uint amount0Out, uint amount1Out, address to, bytes calldata data) external;
+    function skim(address to) external;
+    function sync() external;
+
+    function initialize(address, address) external;
+}
+
+
+// File contracts/Const.sol
+
+// Original license: SPDX_License_Identifier: UNLICENSED
+pragma solidity ^0.8.20;
+
+// 主网
+// address constant _USDT = 0x55d398326f99059fF775485246999027B3197955; // USDT
+// address constant _SF = 0x8b07a652203905240a3b9759627f17d6e8F14994; // SF Token
+// address constant _ROUTER = 0x10ED43C718714eb63d5aA57B78B54704E256024E; // PancakeSwap Router
+// address constant FUND_ADDRESS = 0xb966801b01b3EE8DafB0e4cf0FbDa5fEbC0FA1F7; // Fund Address
+
+address constant _USDT = 0xC6961C826cAdAC9b85F444416D3bf0Ca2a1c38CA; // MUSDT
+address constant _SF = 0x9af8d66Fc14beC856896771fD7D2DB12b41ED9E8; // SF Token
+address constant _SFK = 0xb362f8372cE0EF2265E9988292d17abfEB96473f; // SFK Token
+address constant _ROUTER = 0xD99D1c33F9fC3444f8101754aBC46c52416550D1; // PancakeSwap Router
+address constant FUND_ADDRESS = 0xf3A51876c0Fb4FA7F99A62E3D6CF7d0574Aeb60d; // Fund Address (测试用 Owner 地址)
+
+
+// File contracts/interface/ISF.sol
+
+// Original license: SPDX_License_Identifier: UNLICENSED
+pragma solidity ^0.8.20;
+
+interface ISFErc20 {
+    event ExcludedFromFee(address account);
+    event IncludedToFee(address account);
+    event OwnershipTransferred(address indexed user, address indexed newOwner);
+
+    function allowance(address, address) external view returns (uint256);
+    function approve(address spender, uint256 amount) external returns (bool);
+    function balanceOf(address) external view returns (uint256);
+    function decimals() external view returns (uint8);
+    function distributor() external view returns (address);
+    function dividendToUsersLp() external;
+    function excludeFromDividend(address account) external;
+    function excludeFromFee(address account) external;
+    function excludeMultipleAccountsFromFee(address[] memory accounts) external;
+    // function getInviter(address user) external view returns (address);
+    function inSwapAndLiquify() external view returns (bool);
+    function includeInFee(address account) external;
+    function isDividendExempt(address) external view returns (bool);
+    function isExcludedFromFee(address account) external view returns (bool);
+    function isInShareholders(address) external view returns (bool);
+    function isPreacher(address user) external view returns (bool);
+    function is200Pair(address user) external  view returns (bool);
+    function lastLPFeefenhongTime() external view returns (uint256);
+    function launchedAtTimestamp() external view returns (uint40);
+    function minDistribution() external view returns (uint256);
+    function minPeriod() external view returns (uint256);
+    function name() external view returns (string memory);
+    function owner() external view returns (address);
+    function presale() external view returns (bool);
+    function setDistributorGasForLp(uint256 _distributorGasForLp) external;
+    function setMinDistribution(uint256 _minDistribution) external;
+    function setMinPeriod(uint256 _minPeriod) external;
+    function setPresale() external;
+    function shareholderIndexes(address) external view returns (uint256);
+    function shareholders(uint256) external view returns (address);
+    function symbol() external view returns (string memory);
+    function tOwnedU(address user) external view returns (uint256 totalUbuy);
+    function transferOwnership(address newOwner) external;
+    function uniswapV2Pair() external view returns (address);
+    function recycle(uint256 amount) external;
+    // function setInvite(address user, address parent) external;
+    // function inviter(address user) external view returns (address parent);
+    function getReserveU() external view returns (uint112);
+
+    function totalSupply() external view returns (uint256);
+    function transfer(address to, uint256 amount) external returns (bool);
+    function transferFrom(address from, address to, uint256 amount) external returns (bool);
+}
+
+
+// File contracts/interface/ISFExchange.sol
+
+// Original license: SPDX_License_Identifier: UNLICENSED
+pragma solidity >=0.8.20 <0.8.25;
+
+/**
+ * @title ISFExchange Interface
+ * @notice SF 兑换合约接口（中间合约）
+ * @dev 用于质押合约与 SF 兑换合约的交互
+ */
+interface ISFExchange {
+    // ============ Events ============
+    
+    event ExchangeUSDTForSF(address indexed user, uint256 usdtAmount, uint256 sfAmount);
+    event ExchangeSFForUSDT(address indexed user, uint256 sfAmount, uint256 usdtAmount);
+    event WhitelistDeposit(address indexed from, uint256 sfAmount, uint256 usdtAmount);
+    event StakingContractUpdated(address indexed oldContract, address indexed newContract);
+    event ReserveThresholdUpdated(uint256 minSFReserve, uint256 minUSDTReserve);
+    
+    // ============ Core Functions ============
+    
+    /**
+     * @dev 质押时：USDT → SF（无税）
+     * @param usdtAmount USDT 数量
+     * @return sfAmount 返回的 SF 数量
+     * @notice 只能由授权的质押合约调用
+     */
+    function exchangeUSDTForSF(uint256 usdtAmount) external returns (uint256 sfAmount);
+    
+    /**
+     * @dev 解押时：SF → USDT
+     * @param sfAmount SF 数量
+     * @return usdtAmount 返回的 USDT 数量
+     * @notice 只能由授权的质押合约调用
+     */
+    function exchangeSFForUSDT(uint256 sfAmount) external returns (uint256 usdtAmount);
+    
+    // ============ Admin Functions ============
+    
+    /**
+     * @dev 白名单充值（链下购买后转入）
+     * @param sfAmount SF 数量
+     * @param usdtAmount USDT 数量
+     * @notice 只能由 owner 调用
+     */
+    function depositFromWhitelist(uint256 sfAmount, uint256 usdtAmount) external;
+    
+    /**
+     * @dev 设置质押合约地址
+     * @param _stakingContract 新的质押合约地址
+     */
+    function setStakingContract(address _stakingContract) external;
+    
+    /**
+     * @dev 设置最小储备金阈值
+     * @param _minSFReserve 最小 SF 储备
+     * @param _minUSDTReserve 最小 USDT 储备
+     */
+    function setReserveThresholds(uint256 _minSFReserve, uint256 _minUSDTReserve) external;
+    
+    /**
+     * @dev 紧急提取（仅 owner）
+     * @param token 代币地址
+     * @param amount 提取数量
+     * @param to 接收地址
+     */
+    function emergencyWithdraw(address token, uint256 amount, address to) external;
+    
+    // ============ View Functions ============
+    
+    /**
+     * @dev 计算兑换价格（基于 SF/USDT 池）
+     * @param usdtAmount USDT 数量
+     * @return SF 数量
+     */
+    function calculateSFAmount(uint256 usdtAmount) external view returns (uint256);
+    
+    /**
+     * @dev 计算兑换价格（基于 SF/USDT 池）
+     * @param sfAmount SF 数量
+     * @return USDT 数量
+     */
+    function calculateUSDTAmount(uint256 sfAmount) external view returns (uint256);
+    
+    /**
+     * @dev 查询储备金状态
+     * @return sfBalance SF 余额
+     * @return usdtBalance USDT 余额
+     * @return sfSufficient SF 储备是否充足
+     * @return usdtSufficient USDT 储备是否充足
+     */
+    function getReserveStatus() external view returns (
+        uint256 sfBalance,
+        uint256 usdtBalance,
+        bool sfSufficient,
+        bool usdtSufficient
+    );
+    
+    /**
+     * @dev 获取配置参数
+     * @return minSFReserve 最小 SF 储备
+     * @return minUSDTReserve 最小 USDT 储备
+     * @return stakingContract 授权的质押合约地址
+     */
+    function getConfig() external view returns (
+        uint256 minSFReserve,
+        uint256 minUSDTReserve,
+        address stakingContract
+    );
+}
+
+
+// File contracts/interface/ISFK.sol
+
+// Original license: SPDX_License_Identifier: UNLICENSED
+pragma solidity ^0.8.20;
+
+interface ISFK {
+    event ExcludedFromFee(address account);
+    event IncludedToFee(address account);
+    event OwnershipTransferred(address indexed user, address indexed newOwner);
+
+    function allowance(address, address) external view returns (uint256);
+    function approve(address spender, uint256 amount) external returns (bool);
+    function balanceOf(address) external view returns (uint256);
+    function decimals() external view returns (uint8);
+    function distributor() external view returns (address);
+    function dividendToUsersLp() external;
+    function excludeFromDividend(address account) external;
+    function excludeFromFee(address account) external;
+    function excludeMultipleAccountsFromFee(address[] memory accounts) external;
+    // function getInviter(address user) external view returns (address);
+    function inSwapAndLiquify() external view returns (bool);
+    function includeInFee(address account) external;
+    function isDividendExempt(address) external view returns (bool);
+    function isExcludedFromFee(address account) external view returns (bool);
+    function isInShareholders(address) external view returns (bool);
+    function isPreacher(address user) external view returns (bool);
+    function is200Pair(address user) external  view returns (bool);
+    function lastLPFeefenhongTime() external view returns (uint256);
+    function launchedAtTimestamp() external view returns (uint40);
+    function minDistribution() external view returns (uint256);
+    function minPeriod() external view returns (uint256);
+    function name() external view returns (string memory);
+    function owner() external view returns (address);
+    function presale() external view returns (bool);
+    function setDistributorGasForLp(uint256 _distributorGasForLp) external;
+    function setMinDistribution(uint256 _minDistribution) external;
+    function setMinPeriod(uint256 _minPeriod) external;
+    function setPresale() external;
+    function shareholderIndexes(address) external view returns (uint256);
+    function shareholders(uint256) external view returns (address);
+    function symbol() external view returns (string memory);
+    function tOwnedU(address user) external view returns (uint256 totalUbuy);
+    function transferOwnership(address newOwner) external;
+    function uniswapV2Pair() external view returns (address);
+    function recycleUSDT(uint256 amount) external;
+    function recycleSF(uint256 amount) external;
+    // function setInvite(address user, address parent) external;
+    // function inviter(address user) external view returns (address parent);
+    function getReserveUSDT() external view returns (uint112);
+    function getReserveSF() external view returns (uint112);
+
+    function totalSupply() external view returns (uint256);
+    function transfer(address to, uint256 amount) external returns (bool);
+    function transferFrom(address from, address to, uint256 amount) external returns (bool);
+}
+
+
+// File contracts/interface/IStakingReward.sol
+
+// Original license: SPDX_License_Identifier: UNLICENSED
+pragma solidity >=0.8.20 <0.8.25;
+
+interface IStakingReward {
+    function updateDirectReferralData(address user, uint256 amount) external;
+    function newDistributionLogic(address _user, uint256 profitReward) external returns (uint256);
+    function getDirectReferralCount(address user) external view returns (uint256);
+    function getTeamLevel(address user) external view returns (uint256);
+    function getNewDistributionInfo(address user) external view returns (
+        uint256 referralProfit,
+        uint256 teamProfit,
+        uint256 teamLevelValue,
+        uint256 directCount,
+        bool canClaimReward
+    );
+    function getDepartmentStats(address user) external view returns (
+        uint256 count3,
+        uint256 count4,
+        uint256 count5,
+        uint256 dept1Level,
+        uint256 dept2Level,
+        uint256 teamKpi
+    );
+    function emitUnstakePerformanceUpdate(address user,uint256 amount) external;
+}
+
+
+// File contracts/interface/IUniswapV2FactoryLike.sol
+
+// Original license: SPDX_License_Identifier: UNLICENSED
+pragma solidity >=0.8.20 <0.8.25;
+
+/**
+ * @title IStaking Interface
+ * @dev Staking 合约接口，用于 StakingReward 合约调用 Staking 合约的函数
+ */
+interface IUniswapV2FactoryLike {
+    function getPair(address tokenA, address tokenB) external view returns (address pair);
+}
+
+
+// File solmate/src/auth/Owned.sol
+
+// Original license: SPDX_License_Identifier: AGPL-3.0-only
+pragma solidity >=0.8.0;
+
+/// @notice Simple single owner authorization mixin.
+/// @author Solmate (https://github.com/transmissions11/solmate/blob/main/src/auth/Owned.sol)
+abstract contract Owned {
+    /*//////////////////////////////////////////////////////////////
+                                 EVENTS
+    //////////////////////////////////////////////////////////////*/
+
+    event OwnershipTransferred(address indexed user, address indexed newOwner);
+
+    /*//////////////////////////////////////////////////////////////
+                            OWNERSHIP STORAGE
+    //////////////////////////////////////////////////////////////*/
+
+    address public owner;
+
+    modifier onlyOwner() virtual {
+        require(msg.sender == owner, "UNAUTHORIZED");
+
+        _;
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                               CONSTRUCTOR
+    //////////////////////////////////////////////////////////////*/
+
+    constructor(address _owner) {
+        owner = _owner;
+
+        emit OwnershipTransferred(address(0), _owner);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                             OWNERSHIP LOGIC
+    //////////////////////////////////////////////////////////////*/
+
+    function transferOwnership(address newOwner) public virtual onlyOwner {
+        owner = newOwner;
+
+        emit OwnershipTransferred(msg.sender, newOwner);
+    }
+}
+
+
+// File contracts/SFKStaking.sol
+
 /**
  *Submitted for verification at BscScan.com on 2025-10-11
 */
 
-// SPDX-License-Identifier: UNLICENSED
+// Original license: SPDX_License_Identifier: UNLICENSED
 pragma solidity >=0.8.20 <0.8.25;
 
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import {IUniswapV2Pair} from "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol";
-import {IUniswapV2Router02} from "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
-import {Owned} from "solmate/src/auth/Owned.sol";
-import {ISFErc20} from "./interface/ISF.sol";
-import {ISFK} from "./interface/ISFK.sol";
-import {ISFExchange} from "./interface/ISFExchange.sol";
-import {IStakingReward} from "./interface/IStakingReward.sol";
-import {_USDT, _ROUTER} from "./Const.sol";
-import {IUniswapV2FactoryLike} from "./interface/IUniswapV2FactoryLike.sol";
+
+
+
+
+
+
+
+
+
 
 library Math {
     function min(uint40 a, uint40 b) internal pure returns (uint40) {
@@ -132,9 +845,20 @@ contract Staking is Referral,Owned,ReentrancyGuard {
     // event RankingReward(address indexed user, uint256 rewardType, uint256 reward, uint40 timestamp);
     event TeamLevelUpdated(address indexed user, uint256 previousLevel, uint256 newLevel, uint256 kpi, uint40 timestamp);
     
+
+    // ============ 原正式配置（已注释）============
+    // 收益率配置：1天期每天0.3%，15天期每天0.6%，30天期每天1.3%
+    // 每秒复利因子计算：(1 + 日收益率)^(1/86400)
+    // uint256[3] rates = [1000000003463000000,1000000006917000000,1000000014950000000];
+    // uint256[3] stakeDays = [1 days, 15 days, 30 days];
+    // uint40 public constant timeStep = 1 days;
+    
+    // ============ 测试模式配置 ============
+    // 测试模式：时间段改为1分钟、15分钟、30分钟
+    // 收益率配置保持不变（使用相同的复利因子）
     uint256[3] rates = [1000000003463000000,1000000006917000000,1000000014950000000];
-    uint256[3] stakeDays = [1 days, 15days, 30 days];
-    uint40 public constant timeStep = 1 days;
+    uint256[3] stakeDays = [1 minutes, 15 minutes, 30 minutes];
+    uint40 public constant timeStep = 1 minutes;
 
     IUniswapV2Router02 constant ROUTER = IUniswapV2Router02(_ROUTER);
     IERC20 constant USDT = IERC20(_USDT);
@@ -157,10 +881,11 @@ contract Staking is Referral,Owned,ReentrancyGuard {
     // EOA地址提取相关状态变量
     address public eoaWithdrawAddress;  // EOA地址（可配置，由owner设置）
 
+    // 审计建议：decimals 和 totalSupply 可以考虑从 OpenZeppelin 导入（建议性更新）
  
     uint8 public constant decimals = 18;
-    string public constant name = "KoreaSFK";
-    string public constant symbol = "KoreaSFK";
+    string public constant name = "ComToken";
+    string public constant symbol = "ComToken";
 
     uint256 public totalSupply;
     mapping(address => uint256) public balances;
@@ -180,8 +905,11 @@ contract Staking is Referral,Owned,ReentrancyGuard {
     uint256 public mMinSwapRatioToken = 50;//100
     uint256 startTime=0;
     // uint256 constant network1InTime=90 days;  // 原正式配置
-    uint256 constant network1InTime=90 minutes;  
+    uint256 constant network1InTime=90 minutes;  // 测试模式：改为90分钟
     bool bStart = false;
+    
+    // 优化：使用10秒时间桶记录质押量，实现精确的滑动窗口查询
+    // 10秒桶索引计算：bucketIndex = block.timestamp / 10 seconds
     mapping(uint256 => uint256) public tenSecondStakeAmount;  // bucketIndex => 该10秒的累计质押量
     uint256 public lastUpdatedBucket;  // 最后更新的10秒桶索引
 
@@ -272,20 +1000,30 @@ contract Staking is Referral,Owned,ReentrancyGuard {
             }
         }
     }
-
+    /**
+     * @dev 更新当前10秒桶的质押量累加器
+     * @param amount 新增的质押量
+     */
     function _updateMinuteStakeAmount(uint256 amount) private {
-
+        // 计算当前10秒桶索引（10秒级别，向下取整）
+        // 例如：10:01:35 → bucketIndex = 10:01:35 / 10 = 6001
         uint256 currentBucket = block.timestamp / 10 seconds;
+        
+        // 累加到对应10秒桶的累计量
         tenSecondStakeAmount[currentBucket] += amount;
         lastUpdatedBucket = currentBucket;
     }
     
-
+    /**
+     * @dev 获取最近1分钟的质押量（滑动窗口：block.timestamp - 1 minutes 到 block.timestamp）
+     * 使用10秒时间桶，实现精确的滑动窗口查询，O(6)复杂度
+     */
     function network1In() public view returns (uint256 value) {
         if(block.timestamp > startTime+network1InTime) {
             return 0 ether;
         }
         
+        // 计算滑动窗口：当前时间 - 1分钟 到 当前时间
         uint256 windowStart = block.timestamp - 1 minutes;
         uint256 windowEnd = block.timestamp;
         
@@ -293,12 +1031,11 @@ contract Staking is Referral,Owned,ReentrancyGuard {
         uint256 startBucket = windowStart / 10 seconds;
         uint256 endBucket = windowEnd / 10 seconds;
         
+        // 滑动窗口最多跨越6-7个10秒桶（60秒窗口）        
         value = 0;
         for (uint256 bucket = startBucket; bucket <= endBucket; bucket++) {
             value += tenSecondStakeAmount[bucket];
         }
-        
-       
         
         return value;
     }
@@ -309,38 +1046,57 @@ contract Staking is Referral,Owned,ReentrancyGuard {
         // uint256 num00 = (block.timestamp - startTime)/(timeStep);
         // amout0 = 100 ether + num00 * (30 ether );
 
+        // 计算经过了多少个24小时
         uint256 daysElapsed = (block.timestamp - startTime) / 1 days;
         
+        // 初始200U，每24小时递增100U
         amout0 = 200 ether + daysElapsed * (100 ether);
 
         if(amout0 > 2000 ether) amout0 = 2000 ether;
         return amout0;
     }
-  
+    // function maxStakeAmount() public view returns (uint256) {
+    //     uint256 lastIn = network1In();
+    //     uint256 canStakV = canStakeAmount();
+    //     if(lastIn>canStakV) return 0;
+    //     lastIn=canStakV - lastIn;
+    //     uint112 reverseu = SFK.getReserveUSDT();
+    //     uint256 p1 = reverseu / 100;
+    //     if (lastIn > p1) lastIn = p1;
+    //     return lastIn;
+    // }
     function maxStakeAmount() public view returns (uint256) {
         uint256 lastIn = network1In();  // 最近1分钟的入场量
         uint256 canStakV = canStakeAmount();  // 每分钟可入场额度
         
+        // 如果最近1分钟入场量超过额度，返回0
         if(lastIn > canStakV) return 0;
         
+        // 计算剩余可入场额度
         uint256 remaining = canStakV - lastIn;
         
+        // 获取底池USDT储备
         uint256 reverseu = SFK.getReserveUSDT();
         uint256 sfReserve = getSFSFK_SFReserve(); // 获取池子里边有多少SF
         uint256 usdtOut = quoteSFInUSDT(sfReserve); // SF转换成USDT
         reverseu = reverseu + usdtOut ;
         
+        // 如果已达到2000U上限，使用底池0.2%的逻辑
         if(canStakV >= 2000 ether) {
+            // 计算底池的0.2% (reverseu * 2 / 1000 = reverseu / 500)
             uint256 poolLimit = reverseu / 500;
             
+            // 如果底池0.2% < 2000U，按2000U来
             if(poolLimit < 2000 ether) {
                 poolLimit = 2000 ether;
             }
             
+            // 取剩余额度与底池限制的较小值
             if(remaining > poolLimit) {
                 remaining = poolLimit;
             }
         } else {
+            // 未达到2000U时，使用底池的0.2%
             uint256 p1 = reverseu / 500;  // 底池的0.2%
             if(remaining > p1) {
                 remaining = p1;
@@ -834,19 +1590,19 @@ contract Staking is Referral,Owned,ReentrancyGuard {
     }
 
     struct Vars {
-        uint256 reward;          
-        uint256 stake;           
-        uint256 sfkBefore;      
-        uint256 usdtBefore;      
-        uint256 sfBefore;        
-        uint256 totalUsdtValue;  
-        uint256 halfUsdtValue;   
-        uint256 usdtFromPool1;  
-        uint256 sfFromPool2;     
-        uint256 usdtFromExchange; 
-        uint256 totalUsdtForUser; 
-        uint256 actualSFK1Used;   
-        uint256 actualSFK2Used;   
+        uint256 reward;          // 总收益（SFK 数量，本金+收益）
+        uint256 stake;           // 本金（SFK 数量）
+        uint256 sfkBefore;       // 交换前的 SFK 余额
+        uint256 usdtBefore;      // 交换前的 USDT 余额
+        uint256 sfBefore;        // 交换前的 SF 余额
+        uint256 totalUsdtValue;  // 总 USDT 价值（基于当前价格）
+        uint256 halfUsdtValue;   // 一半的 USDT 价值
+        uint256 usdtFromPool1;   // 从 USDT/SFK 池获得的 USDT
+        uint256 sfFromPool2;     // 从 SF/SFK 池获得的 SF
+        uint256 usdtFromExchange; // 通过 sfExchange 获得的 USDT
+        uint256 totalUsdtForUser; // 用户总共获得的 USDT
+        uint256 actualSFK1Used;   // USDT池实际使用的 SFK（用于 recycle）
+        uint256 actualSFK2Used;   // SF池实际使用的 SFK（用于 recycle）
     }
 
     function unstake(uint256 index) external onlyEOA nonReentrant returns (uint256) {
@@ -858,8 +1614,9 @@ contract Staking is Referral,Owned,ReentrancyGuard {
         v.usdtBefore = USDT.balanceOf(address(this));
         v.sfBefore = SF.balanceOf(address(this));
 
+        // 计算总 USDT 价值（v.reward 是 SFK 数量）
         v.totalUsdtValue = getUsdtAmountsOut(v.reward);
-        v.halfUsdtValue = v.totalUsdtValue / 2;  
+        v.halfUsdtValue = v.totalUsdtValue / 2;  // 50% 分配
 
         // 第一部分：从 USDT/SFK 池获取 USDT
         address[] memory pathUsdt = new address[](2);
@@ -868,20 +1625,26 @@ contract Staking is Referral,Owned,ReentrancyGuard {
         uint256[] memory amountsInUsdt = ROUTER.getAmountsIn(v.halfUsdtValue, pathUsdt);
         uint256 requiredSFK1 = amountsInUsdt[0];
         
-       
+        // 检查合约是否有足够的 SFK
         require(v.sfkBefore >= requiredSFK1, "Insufficient SFK balance for USDT pool");
 
+        // 记录 swap 前的 SFK 余额
         uint256 sfkBeforeSwap1 = SFK.balanceOf(address(this));
         
+        // 从 USDT/SFK 池 swap SFK → USDT
         v.usdtFromPool1 = swapSFKForUSDT(requiredSFK1, address(this));
 
+        // 记录实际使用的 SFK 数量
         v.actualSFK1Used = sfkBeforeSwap1 - SFK.balanceOf(address(this));
 
         // 第二部分：从 SF/SFK 池获取 SF，通过 sfExchange 换成 USDT
+        // 通过 SFExchange 计算需要多少 SF 才能换到 v.halfUsdtValue 的 USDT
         uint256 requiredSF = sfExchange.calculateSFAmount(v.halfUsdtValue);
 
+        // 多使用 1% 的 SFK 去换取 SF
         uint256 requiredSFWithBuffer = requiredSF * 101 / 100;
         
+        // 计算需要多少 SFK 才能从 SF/SFK 池换到 requiredSF 数量的 SF
         address[] memory pathSfkToSf = new address[](2);
         pathSfkToSf[0] = address(SFK);
         pathSfkToSf[1] = address(SF);
@@ -895,35 +1658,46 @@ contract Staking is Referral,Owned,ReentrancyGuard {
         v.sfFromPool2 = swapSFKForSF(requiredSFK2, address(this));
         v.actualSFK2Used = requiredSFK2;
 
+        // 通过 sfExchange 将 SF 换成 USDT
         SF.approve(address(sfExchange), type(uint256).max);
         if (v.sfFromPool2 >= requiredSF) {
             v.usdtFromExchange = sfExchange.exchangeSFForUSDT(v.sfFromPool2);
+            // 将多余的 SF 转给 SFExchange 作为储备
             uint256 sfRemaining = v.sfFromPool2 - requiredSF;
             if (sfRemaining > 0) {
                 SF.transfer(address(sfExchange), sfRemaining);
             }
         } else {
+            // 如果得到的 SF 少于需要的，全部使用
             v.usdtFromExchange = sfExchange.exchangeSFForUSDT(v.sfFromPool2);
+            
+            // 如果得到的 USDT 仍然不足，是否用合约余额补充，待定
         }
 
+        // 计算用户应得的 USDT
         v.totalUsdtForUser = v.usdtFromPool1 + v.usdtFromExchange;
 
+        // CEI模式：先更新状态
         address[] memory refs = getReferrals(msg.sender, maxD);
         for (uint256 i = 0; i < refs.length; ++i) {
             teamTotalInvestValue[refs[i]] -= v.stake;
         }
 
+        // 解压发出事件
         if(address(stakingReward) != address(0)){
             stakingReward.emitUnstakePerformanceUpdate(msg.sender, v.stake);
         }
         
         
+        // 计算收益部分（用于奖励分配）
         uint256 profitReward = 0;
         if (v.reward > v.stake) {
             profitReward = v.reward - v.stake;
         }
         
+        // 调用奖励分配逻辑（通过 StakingReward 合约）
         if (address(stakingReward) != address(0) && profitReward > 0) {
+            // 将收益转换为 USDT 价值
             uint256 profitUsdt = getUsdtAmountsOut(profitReward);
             if (profitUsdt > 0) {
                 stakingReward.newDistributionLogic(msg.sender, profitUsdt);
@@ -933,15 +1707,16 @@ contract Staking is Referral,Owned,ReentrancyGuard {
         // 执行外部调用
         USDT.transfer(msg.sender, v.totalUsdtForUser);
 
+        // 回收使用的 SFK 回到 Staking 合约
         SFK.recycleUSDT(v.actualSFK1Used);
         SFK.recycleSF(v.actualSFK2Used);
 
         // 触发事件：通知链下处理
         emit UnstakeSFToWhitelist(
             msg.sender, 
-            v.sfFromPool2,           
-            v.halfUsdtValue,        
-            v.usdtFromExchange,      
+            v.sfFromPool2,           // 发送到白名单的 SF 数量
+            v.halfUsdtValue,         // 期望的 USDT 价值
+            v.usdtFromExchange,      // 实际通过 exchange 得到的 USDT
             uint40(block.timestamp)
         );
         
@@ -1027,6 +1802,7 @@ contract Staking is Referral,Owned,ReentrancyGuard {
     }
 
     // ============ 新分配逻辑函数 ============
+    // 已移至 StakingReward 合约，通过 stakingReward 接口调用
     
     // 查询函数（委托给 StakingReward 合约）
     function getDirectReferralCount(address user) public view returns (uint256) {
