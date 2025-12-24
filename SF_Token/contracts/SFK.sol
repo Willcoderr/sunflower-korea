@@ -626,6 +626,8 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
             uint256 dynamicTechFee = 0;
             // 只有下跌（负数）且跌幅超过13%（1300基点）才增加技术运营费用
             if (priceChangeBps < 0) {
+                
+                require(priceChangeBps > type(int256).min, "Price change overflow");
                 uint256 absPriceChange = uint256(-priceChangeBps); // 转换为正数
                 if (absPriceChange >= 1300) {
                     // 限制最高跌幅为30%（3000基点）

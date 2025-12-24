@@ -15,6 +15,7 @@ import {ISFK} from "./interface/ISFK.sol";
 import {ISFExchange} from "./interface/ISFExchange.sol";
 import {IStakingReward} from "./interface/IStakingReward.sol";
 import {_USDT, _ROUTER} from "./Const.sol";
+import {IUniswapV2FactoryLike} from "./interface/IUniswapV2FactoryLike.sol";
 
 library Math {
     function min(uint40 a, uint40 b) internal pure returns (uint40) {
@@ -386,7 +387,10 @@ contract Staking is Referral,Owned,ReentrancyGuard {
         uint256 remaining = canStakV - lastIn;
         
         // 获取底池USDT储备
-        uint112 reverseu = SFK.getReserveUSDT();
+        uint256 reverseu = SFK.getReserveUSDT();
+        uint256 sfReserve = getSFSFK_SFReserve(); // 获取池子里边有多少SF
+        uint256 usdtOut = quoteSFInUSDT(sfReserve); // SF转换成USDT
+        reverseu = reverseu + usdtOut ;
         
         // 如果已达到2000U上限，使用底池0.2%的逻辑
         if(canStakV >= 2000 ether) {
@@ -412,6 +416,32 @@ contract Staking is Referral,Owned,ReentrancyGuard {
         
         return remaining;
     }
+
+     //两跳：SF -> SFK -> USDT，避免直接 SF/USDT 没池子
+     function quoteSFInUSDT(uint256 sfAmount) public view returns (uint256 usdtOut) {
+         if (sfAmount == 0) return 0;
+         address[] memory path = new address[](3);
+         path[0] = address(SF);
+         path[1] = address(SFK);
+         path[2] = address(USDT);
+         uint256[] memory amountsOut = ROUTER.getAmountsOut(sfAmount, path);
+         return amountsOut[2];
+    }
+
+   /// @notice 获取 SF/SFK 池中 SF 的储备量（只读，不swap）
+   function getSFSFK_SFReserve() public view returns (uint256 sfReserve) {
+       address factory = ROUTER.factory();
+       address pair = IUniswapV2FactoryLike(factory).getPair(address(SF), address(SFK));
+       require(pair != address(0), "SF/SFK pair not exist");
+
+       (uint112 r0, uint112 r1, ) = IUniswapV2Pair(pair).getReserves();
+        address token0 = IUniswapV2Pair(pair).token0();
+
+       // token0 是 SF 就取 r0，否则取 r1
+       sfReserve = (token0 == address(SF)) ? uint256(r0) : uint256(r1);
+       return sfReserve;
+   }
+
 
     //uint8 最大 255，用户记录最多200条，所以使用uint256不会越界
     function rewardOfSlot(address user, uint256 index) public view returns (uint256 reward){
