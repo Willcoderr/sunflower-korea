@@ -5,11 +5,6 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Owned} from "solmate/src/auth/Owned.sol";
 import {IStaking} from "./interface/IStaking.sol";
 
-/**
- * @title StakingReward
- * @dev 处理质押奖励分配、直推关系、团队等级等功能
- * 从 Staking 合约中提取出来，以解决合约代码大小超限问题
- */
 contract StakingReward is Owned {
     // 关联的 Staking 合约
     IStaking public stakingContract;
@@ -148,11 +143,6 @@ contract StakingReward is Owned {
     ) external onlyStaking {
         address parent = _getReferral(user);
         if (parent != address(0)) {
-            // bool isNewUser = !_isInDirectReferralList(parent, user);
-            // if (isNewUser) {
-            //     directReferralList[parent].push(user);
-            //     directReferralCount[parent] += 1;
-            // }
             bool wasUnlocked = isUnlocked[user];  // 记录旧状态
             bool  isNewUser = !isDirectReferral[parent][user];
 
@@ -166,19 +156,13 @@ contract StakingReward is Owned {
             uint256 newBalance = _getBalance(user);
             bool nowUnlocked = newBalance >= 200e18;
             if (isNewUser) {
-                // 新用户成为直推，如果新用户未解锁，不需要更新计数器
                 if (nowUnlocked) {
-                    // 新用户且已解锁，父级计数器+1
                     qualifiedDirectReferralCount[parent]++;
                 }
             } else {
-                // 已存在的用户，检查状态变化
                 if (!wasUnlocked && nowUnlocked) {
-                    // 从锁定变为解锁：计数器+1
                     qualifiedDirectReferralCount[parent]++;
                 } else if (wasUnlocked && !nowUnlocked) {
-                    // 从解锁变为锁定：计数器-1
-                    // 质押时理论上不会发生这种情况，但为安全起见保留
                     if (qualifiedDirectReferralCount[parent] > 0) {
                         qualifiedDirectReferralCount[parent]--;
                     }
@@ -187,7 +171,6 @@ contract StakingReward is Owned {
 
             isUnlocked[user] = nowUnlocked;
 
-            // 发出事件，记录直推关系更新
             emit StakePerformanceUpdate(
                 user,
                 parent,
@@ -199,7 +182,6 @@ contract StakingReward is Owned {
     }
 
 
-    // 解压发出事件
     function emitUnstakePerformanceUpdate(address user,uint256 amount) external onlyStaking {
         address parent = _getReferral(user);
         if(parent !=  address(0)){
@@ -207,10 +189,8 @@ contract StakingReward is Owned {
 
             uint256 newBalance = _getBalance(user);
             bool nowUnlocked = newBalance >= 200e18;
-            // 解质押时，只可能发生：true->true 或 true->false
-            // 理论上不会发生 false->true（解质押不会增加余额）
+          
             if (wasUnlocked && !nowUnlocked) {
-                // 从解锁变为锁定：计数器-1
                 if (qualifiedDirectReferralCount[parent] > 0) {
                     qualifiedDirectReferralCount[parent]--;
                 }
@@ -284,16 +264,6 @@ contract StakingReward is Owned {
             address referral = referrals[i];
             uint256 generation = i + 1;
 
-            // address[] memory directRefs = getDirectReferrals(referral);
-            // uint256 qualifiedDirectCount = 0;
-            // for (uint256 j = 0; j < directRefs.length; j++) {
-            //     if (isUnlocked[directRefs[j]]) {
-            //         qualifiedDirectCount++;
-            //         if(qualifiedDirectCount >= generation){
-            //             break;
-            //         }
-            //     }
-            // }
             // 使用计数器替代数组遍历
             uint256 qualifiedDirectCount = qualifiedDirectReferralCount[referral];
 
@@ -391,7 +361,6 @@ contract StakingReward is Owned {
                     break;
                 }
             }
-            // 如果 levelRate <= distributedLevel，该上级拿 0（被平级）
 
             currentUser = _getReferral(currentUser);
             depth++;
@@ -521,19 +490,12 @@ contract StakingReward is Owned {
         );
 
         for (uint256 i = 0; i < users.length; i++) {
-
             uint256 previousLevel = teamLevel[users[i]];
             uint256 newLevel = levels[i];
-            
             teamLevel[users[i]] = newLevel;
-
             level3DeptCount[users[i]] = count3s[i];
             level4DeptCount[users[i]] = count4s[i];
             level5DeptCount[users[i]] = count5s[i];
-
-            // departmentLevel[users[i]][0] = dept1Levels[i];
-            // departmentLevel[users[i]][1] = dept2Levels[i];
-
             if(previousLevel != newLevel){
                 uint256 kpi = getTeamKpi(users[i]);
                 emit TeamLevelUpdated(users[i], previousLevel, newLevel, kpi, uint40(block.timestamp));

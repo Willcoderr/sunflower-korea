@@ -181,8 +181,7 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
     mapping(address => uint256) public tOwnedU;
     mapping(address => uint40) public lastBuyTime;
     address public STAKING;
-    // 是否已经不需要对上级奖励了
-    // address immutable REFERRAL;
+
     
     uint256 MAX_BURN_AMOUNT = 8900000 ether; // 890万枚销毁上限
 
@@ -254,18 +253,7 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
         return poolStatusSF.balance;
     } 
 
-    // function _isPair(address addr) internal view returns (bool) {
-    //     if (addr == address(0) || !Helper.isContract(addr)) {
-    //         return false;
-    //     }
-    //     // 尝试调用 getReserves() 来判断是否是 Pair
-    //     // 如果调用成功，说明是 Pair
-    //     try IUniswapV2Pair(addr).getReserves() returns (uint112, uint112, uint32) {
-    //         return true;
-    //     } catch {
-    //         return false;
-    //     }
-    // }
+
 
     function getMyReserves(
         address pair
@@ -389,25 +377,16 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
             tOwnedU[recipient] = tOwnedU[recipient] + amountUBuy;
             lastBuyTime[recipient] = uint40(block.timestamp);
 
-            // 1% 销毁费用
-            // 代币分配：
-            // - 发行总量：1100万枚
-            // - LP底池：700万枚（一次性进入底池，通过交易逐步销毁）
-            // - 交互合约：100万枚（永久恒定，不参与销毁）
-            // - 早期空投：300万枚（通过交易逐步销毁）
-            // - 目标：持续销毁至剩余210万枚
-            // - 需要销毁：1000万 - 210万 = 790万
+
             uint256 burnFee;
             uint256 burnAmount = balanceOf(address(0xdead));
             if (burnAmount < MAX_BURN_AMOUNT) {
                 burnFee = (amount * 10) / 1000; // 1% 销毁费率
-                // 确保不超过销毁上限
                 burnFee = MAX_BURN_AMOUNT - burnAmount > burnFee
                     ? burnFee
                     : MAX_BURN_AMOUNT - burnAmount;
                 super._transfer(sender, address(0xdead), burnFee);
             }
-            // 达到销毁上限后，不再收取销毁费用
             
             // 1% LP费用
             uint256 buyLPFee = (amount * 10) / 1000;
@@ -421,13 +400,11 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
 
             uint256 totalFees = burnFee + buyLPFee + buyNodeFee;
             
-            // 用户实际收到：amount - burnFee - lpFee - nodeFee
             super._transfer(sender, recipient, amount - totalFees);
             
         } else if (uniswapV2PairUSDT == recipient) {
             //sell
             require(presale, "pre");
-            // 前1分钟内不允许卖出
             require(block.timestamp >= lastBuyTime[sender] + coldTime, "cold");
             (uint112 reserveU, uint112 reserveThis) = getMyReserves(
                 uniswapV2PairUSDT
@@ -435,8 +412,6 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
 
             require(amount <= reserveThis / 10, "max sell cap"); // 10% 最大卖出量
 
-            // 卖出税：基础3%（1%回流LP、1%节点分红、1%技术运营）
-            // 前15分钟内额外增加5%（总共8%）
             uint256 sellExtraFee = 0; // 前15分钟的额外5%
             if (launchedAtTimestamp > 0 && 
                 block.timestamp - launchedAtTimestamp <= 15 minutes) {
@@ -449,32 +424,25 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
             // 基础技术运营费用：1%
             uint256 sellTechFee = (amount * 10) / 1000;
             
-            // 动态技术运营费用：如果跌幅超过13%，每增加1%跌幅，技术运营费用增加1%，最高到30%（最多增加17%）
             int256 priceChangeBps = twapOracle.getPriceChangeBps();
             uint256 dynamicTechFee = 0;
-            // 只有下跌（负数）且跌幅超过13%（1300基点）才增加技术运营费用
             if (priceChangeBps < 0) {
+                require(priceChangeBps > type(int256).min, "Price change overflow");
                 uint256 absPriceChange = uint256(-priceChangeBps); // 转换为正数
                 if (absPriceChange >= 1300) {
-                    // 限制最高跌幅为30%（3000基点）
                     uint256 cappedPriceChange = absPriceChange > 3000 ? 3000 : absPriceChange;
-                    // 计算超过13%的部分（以基点为单位）
                     uint256 excessBps = cappedPriceChange - 1300;
-                    // 每1基点跌幅增加1基点技术运营费用（例如：跌幅20% = 2000基点，excessBps = 700基点，即7%）
                     dynamicTechFee = (amount * excessBps) / 10000;
                 }
             }
             
-            // 总技术运营费用 = 基础1% + 动态费用
             sellTechFee = sellTechFee + dynamicTechFee;
 
             uint256 baseFee = sellLPFee + sellNodeFee + sellTechFee + sellExtraFee;
             
-            // 计算卖出得到的 USDT（扣除卖出税后，包括前15分钟的额外5%）
             uint256 amountUOut = getUsdtAmountsOut(amount - baseFee);
             updatePoolReserveUSDT(reserveU);
 
-            // 盈利税：10%（不定期回购销毁代币，地址公示）
             uint256 profitFee = 0;
             if (tOwnedU[sender] >= amountUOut) {
                 // 没有盈利，只扣除成本
@@ -482,13 +450,11 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
                     tOwnedU[sender] = tOwnedU[sender] - amountUOut;
                 }
             } else if (tOwnedU[sender] > 0 && tOwnedU[sender] < amountUOut) {
-                // 有盈利，收取盈利的 10%（换算成代币后的10%,用于回购销毁）
                 uint256 profitU = amountUOut - tOwnedU[sender];
                 uint256 profitThis = getTokenAmountsOut(profitU);
                 profitFee = (profitThis * 100) / 1000; // 盈利税 10%
                 tOwnedU[sender] = 0;
             } else {
-                // 无买入记录，收取卖出金额的 10%（用于回购销毁）
                 profitFee = (amount * 100) / 1000;
                 tOwnedU[sender] = 0;
             }
@@ -498,31 +464,26 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
             
             // 一次性将所有费用转账到合约
             super._transfer(sender, address(this), totalFee);
-            // 累积卖出税费用（需要在 swapProfit 之前更新，因为 swapProfit 会使用这些值计算余额）
             totalAmountLPFeeUSDT += sellLPFee;
             totalAmountNodeFee += sellNodeFee;
             totalAmountTechFee += sellTechFee;
             
-            // 处理盈利税（用于回购销毁，地址：profitAddress）
             if (profitFee > 0) {
                 if (shouldSwapProfit(profitFee)) {
                     swapProfit(profitFee, sender);
                 }
             }
             
-            // 前15分钟的额外5%费用（用于回购销毁）
             if (sellExtraFee > 0) {
                 if (shouldSwapProfit(sellExtraFee)) {
                     swapProfit(sellExtraFee, sender);
                 }
             }
 
-            // 检查是否需要处理累积的费用
             if (shouldSwapTokenForFund(totalAmountLPFeeUSDT + totalAmountNodeFee + totalAmountTechFee)) {
                 swapTokenForFund();
             }
 
-            // 用户实际收到：amount - 所有费用
             uint256 finalAmount = amount - totalFee;
             super._transfer(sender, recipient, finalAmount);
     
@@ -559,26 +520,15 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
             uint256 amountUBuy = getUsdtAmountsOut(amount);
             tOwnedU[recipient] = tOwnedU[recipient] + amountUBuy;
             lastBuyTime[recipient] = uint40(block.timestamp);
-
-            // 1% 销毁费用
-            // 代币分配：
-            // - 发行总量：1100万枚
-            // - LP底池：900万枚（一次性进入底池，通过交易逐步销毁）
-            // - 交互合约：100万枚（永久恒定，不参与销毁）
-            // - 早期空投：100万枚（通过交易逐步销毁）
-            // - 目标：持续销毁至剩余210万枚
-            // - 需要销毁：1000万 - 210万 = 790万
             uint256 burnFee;
             uint256 burnAmount = balanceOf(address(0xdead));
             if (burnAmount < MAX_BURN_AMOUNT) {
-                burnFee = (amount * 10) / 1000; // 1% 销毁费率
-                // 确保不超过销毁上限
+                burnFee = (amount * 10) / 1000; 
                 burnFee = MAX_BURN_AMOUNT - burnAmount > burnFee
                     ? burnFee
                     : MAX_BURN_AMOUNT - burnAmount;
                 super._transfer(sender, address(0xdead), burnFee);
             }
-            // 达到销毁上限后，不再收取销毁费用
             
             // 1% LP费用
             uint256 LPFee = (amount * 10) / 1000;
@@ -592,23 +542,19 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
 
             uint256 totalFees = burnFee + LPFee + nodeFee;
 
-            // 用户实际收到：amount - burnFee - LPFee - nodeFee
             super._transfer(sender, recipient, amount - totalFees);
 
         } else if (uniswapV2PairSF == recipient) {
             //sell
             require(presale, "pre");
             
-            // 前1分钟内不允许卖出
             require(block.timestamp >= lastBuyTime[sender] + coldTime, "cold");
             (uint112 reserveSF, uint112 reserveThis) = getMyReserves(
                 uniswapV2PairSF
             );
 
             require(amount <= reserveThis / 10, "max sell cap");
-            
-            // 卖出税：基础3%（1%回流LP、1%节点分红、1%技术运营）
-            // 前15分钟内额外增加5%（总共8%）
+
             uint256 sellExtraFee = 0; // 前15分钟的额外5%
             if (launchedAtTimestamp > 0 && 
                 block.timestamp - launchedAtTimestamp <= 15 minutes) {
@@ -621,35 +567,27 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
             // 基础技术运营费用：1%
             uint256 sellTechFee = (amount * 10) / 1000;
             
-            // 动态技术运营费用：如果跌幅超过13%，每增加1%跌幅，技术运营费用增加1%，最高到30%（最多增加17%）
             int256 priceChangeBps = twapOracle.getPriceChangeBps();
             uint256 dynamicTechFee = 0;
-            // 只有下跌（负数）且跌幅超过13%（1300基点）才增加技术运营费用
             if (priceChangeBps < 0) {
-                
+
                 require(priceChangeBps > type(int256).min, "Price change overflow");
                 uint256 absPriceChange = uint256(-priceChangeBps); // 转换为正数
                 if (absPriceChange >= 1300) {
-                    // 限制最高跌幅为30%（3000基点）
                     uint256 cappedPriceChange = absPriceChange > 3000 ? 3000 : absPriceChange;
-                    // 计算超过13%的部分（以基点为单位）
                     uint256 excessBps = cappedPriceChange - 1300;
-                    // 每1基点跌幅增加1基点技术运营费用（例如：跌幅20% = 2000基点，excessBps = 700基点，即7%）
                     dynamicTechFee = (amount * excessBps) / 10000;
                 }
             }
             
-            // 总技术运营费用 = 基础1% + 动态费用
             sellTechFee = sellTechFee + dynamicTechFee;
 
             uint256 baseFee = sellLPFee + sellNodeFee + sellTechFee + sellExtraFee;
 
-            // 统一使用USDT池价格计算卖出收益
             uint256 amountUOut = getUsdtAmountsOut(amount - baseFee);
             
             updatePoolReserveSF(reserveSF);
 
-            // 盈利税：10%（不定期回购销毁代币，地址公示）
             uint256 profitFee = 0;
             
             if (tOwnedU[sender] >= amountUOut) {
@@ -658,13 +596,11 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
                     tOwnedU[sender] = tOwnedU[sender] - amountUOut;
                 }
             } else if (tOwnedU[sender] > 0 && tOwnedU[sender] < amountUOut) {
-                // 有盈利，收取盈利的 10%（用于回购销毁）
                 uint256 profitU = amountUOut - tOwnedU[sender];
                 uint256 profitThis = getTokenAmountsOut(profitU);
                 profitFee = (profitThis * 100) / 1000; // 盈利税 10%
                 tOwnedU[sender] = 0;
             } else {
-                // 无买入记录，收取卖出金额的 10%（用于回购销毁）
                 profitFee = (amount * 100) / 1000;
                 tOwnedU[sender] = 0;
             }
@@ -672,34 +608,28 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
             // 计算所有费用总和
             uint256 totalFee = baseFee + profitFee;
        
-            // 累积卖出税费用（需要在 swapProfit 之前更新，因为 swapProfit 会使用这些值计算余额）
             totalAmountLPFeeSF += sellLPFee;
             totalAmountNodeFee += sellNodeFee;
             totalAmountTechFee += sellTechFee;
 
-            // 一次性将所有费用转账到合约
             super._transfer(sender, address(this), totalFee);
 
-            // 处理盈利税（用于回购销毁，地址：profitAddress）
             if (profitFee > 0) {
                 if (shouldSwapProfit(profitFee)) {
                     swapProfit(profitFee, sender);
                 }
             }
             
-            // 前15分钟的额外5%费用（用于回购销毁）
             if (sellExtraFee > 0) {
                 if (shouldSwapProfit(sellExtraFee)) {
                     swapProfit(sellExtraFee, sender);
                 }
             }
             
-            // 检查是否需要处理累积的费用
             if (shouldSwapTokenForFund(totalAmountLPFeeSF + totalAmountNodeFee + totalAmountTechFee)) {
                 swapTokenForFund();
             }
             
-            // 用户实际收到：amount - 所有费用
             uint256 finalAmount = amount - totalFee;
             super._transfer(sender, recipient, finalAmount);
         } else {
@@ -715,26 +645,22 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
     }
 
     function swapTokenForFund() internal lockTheSwap {
-        // 1% LP费用：回流到流动性池
-        // USDT池的LP费用：回流到 USDT/SFK 池
+
         if (totalAmountLPFeeUSDT > 0) {
             swapAndLiquifyUSDT(totalAmountLPFeeUSDT);
             totalAmountLPFeeUSDT = 0;
         }
 
-        // SF池的LP费用：回流到 SF/SFK 池
         if (totalAmountLPFeeSF > 0) {
             swapAndLiquifySF(totalAmountLPFeeSF);
             totalAmountLPFeeSF = 0;
         }
         
-        // 1% 节点分红
         if (totalAmountNodeFee > 0) {
             swapTokenForUsdt(totalAmountNodeFee, NFTNodeAddress);
             totalAmountNodeFee = 0;
         }
         
-        // 1% 技术运营：换成 USDT 后转给技术运营地址
         if (totalAmountTechFee > 0) {
             swapTokenForUsdt(totalAmountTechFee, techAddress);
             totalAmountTechFee = 0;

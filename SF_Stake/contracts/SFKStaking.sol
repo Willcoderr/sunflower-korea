@@ -132,17 +132,6 @@ contract Staking is Referral,Owned,ReentrancyGuard {
     // event RankingReward(address indexed user, uint256 rewardType, uint256 reward, uint40 timestamp);
     event TeamLevelUpdated(address indexed user, uint256 previousLevel, uint256 newLevel, uint256 kpi, uint40 timestamp);
     
-
-    // ============ 原正式配置（已注释）============
-    // 收益率配置：1天期每天0.3%，15天期每天0.6%，30天期每天1.3%
-    // 每秒复利因子计算：(1 + 日收益率)^(1/86400)
-    // uint256[3] rates = [1000000003463000000,1000000006917000000,1000000014950000000];
-    // uint256[3] stakeDays = [1 days, 15 days, 30 days];
-    // uint40 public constant timeStep = 1 days;
-    
-    // ============ 测试模式配置 ============
-    // 测试模式：时间段改为1分钟、15分钟、30分钟
-    // 收益率配置保持不变（使用相同的复利因子）
     uint256[3] rates = [1000000003463000000,1000000006917000000,1000000014950000000];
     uint256[3] stakeDays = [1 minutes, 15 minutes, 30 minutes];
     uint40 public constant timeStep = 1 minutes;
@@ -192,11 +181,8 @@ contract Staking is Referral,Owned,ReentrancyGuard {
     uint256 public mMinSwapRatioToken = 50;//100
     uint256 startTime=0;
     // uint256 constant network1InTime=90 days;  // 原正式配置
-    uint256 constant network1InTime=90 minutes;  // 测试模式：改为90分钟
+    uint256 constant network1InTime=90 minutes;  
     bool bStart = false;
-    
-    // 优化：使用10秒时间桶记录质押量，实现精确的滑动窗口查询
-    // 10秒桶索引计算：bucketIndex = block.timestamp / 10 seconds
     mapping(uint256 => uint256) public tenSecondStakeAmount;  // bucketIndex => 该10秒的累计质押量
     uint256 public lastUpdatedBucket;  // 最后更新的10秒桶索引
 
@@ -287,30 +273,20 @@ contract Staking is Referral,Owned,ReentrancyGuard {
             }
         }
     }
-    /**
-     * @dev 更新当前10秒桶的质押量累加器
-     * @param amount 新增的质押量
-     */
+
     function _updateMinuteStakeAmount(uint256 amount) private {
-        // 计算当前10秒桶索引（10秒级别，向下取整）
-        // 例如：10:01:35 → bucketIndex = 10:01:35 / 10 = 6001
+
         uint256 currentBucket = block.timestamp / 10 seconds;
-        
-        // 累加到对应10秒桶的累计量
         tenSecondStakeAmount[currentBucket] += amount;
         lastUpdatedBucket = currentBucket;
     }
     
-    /**
-     * @dev 获取最近1分钟的质押量（滑动窗口：block.timestamp - 1 minutes 到 block.timestamp）
-     * 使用10秒时间桶，实现精确的滑动窗口查询，O(6)复杂度
-     */
+
     function network1In() public view returns (uint256 value) {
         if(block.timestamp > startTime+network1InTime) {
             return 0 ether;
         }
         
-        // 计算滑动窗口：当前时间 - 1分钟 到 当前时间
         uint256 windowStart = block.timestamp - 1 minutes;
         uint256 windowEnd = block.timestamp;
         
@@ -318,35 +294,12 @@ contract Staking is Referral,Owned,ReentrancyGuard {
         uint256 startBucket = windowStart / 10 seconds;
         uint256 endBucket = windowEnd / 10 seconds;
         
-        // 滑动窗口最多跨越6-7个10秒桶（60秒窗口）        
         value = 0;
         for (uint256 bucket = startBucket; bucket <= endBucket; bucket++) {
             value += tenSecondStakeAmount[bucket];
         }
         
-        // 如果10秒桶中没有数据（合约刚部署或该时间段没有质押），使用旧方法作为fallback
-        // 这种情况应该很少发生? 是否还需要 这个fallback
-        if (value == 0 && t_supply.length > 0) {
-            uint256 len = t_supply.length;
-            uint256 last_supply = totalSupply;
-            
-            // 限制最多遍历最近100条记录，防止gas超限
-            uint256 maxIterations = len > 100 ? len - 100 : 0;
-            
-            for (uint256 i = len - 1; i >= maxIterations; i--) {
-                RecordTT storage stake_tt = t_supply[i];
-                if (windowStart > stake_tt.stakeTime) {
-                    break;
-                } else {
-                    last_supply = stake_tt.tamount;
-                }
-                if (i == 0) break;
-            }
-            
-            if(totalSupply > last_supply){
-                value = totalSupply-last_supply;
-            }
-        }
+       
         
         return value;
     }
@@ -366,16 +319,7 @@ contract Staking is Referral,Owned,ReentrancyGuard {
         if(amout0 > 2000 ether) amout0 = 2000 ether;
         return amout0;
     }
-    // function maxStakeAmount() public view returns (uint256) {
-    //     uint256 lastIn = network1In();
-    //     uint256 canStakV = canStakeAmount();
-    //     if(lastIn>canStakV) return 0;
-    //     lastIn=canStakV - lastIn;
-    //     uint112 reverseu = SFK.getReserveUSDT();
-    //     uint256 p1 = reverseu / 100;
-    //     if (lastIn > p1) lastIn = p1;
-    //     return lastIn;
-    // }
+  
     function maxStakeAmount() public view returns (uint256) {
         uint256 lastIn = network1In();  // 最近1分钟的入场量
         uint256 canStakV = canStakeAmount();  // 每分钟可入场额度
@@ -901,19 +845,19 @@ contract Staking is Referral,Owned,ReentrancyGuard {
     }
 
     struct Vars {
-        uint256 reward;          // 总收益（SFK 数量，本金+收益）
-        uint256 stake;           // 本金（SFK 数量）
-        uint256 sfkBefore;       // 交换前的 SFK 余额
-        uint256 usdtBefore;      // 交换前的 USDT 余额
-        uint256 sfBefore;        // 交换前的 SF 余额
-        uint256 totalUsdtValue;  // 总 USDT 价值（基于当前价格）
-        uint256 halfUsdtValue;   // 一半的 USDT 价值
-        uint256 usdtFromPool1;   // 从 USDT/SFK 池获得的 USDT
-        uint256 sfFromPool2;     // 从 SF/SFK 池获得的 SF
-        uint256 usdtFromExchange; // 通过 sfExchange 获得的 USDT
-        uint256 totalUsdtForUser; // 用户总共获得的 USDT
-        uint256 actualSFK1Used;   // USDT池实际使用的 SFK（用于 recycle）
-        uint256 actualSFK2Used;   // SF池实际使用的 SFK（用于 recycle）
+        uint256 reward;          
+        uint256 stake;           
+        uint256 sfkBefore;      
+        uint256 usdtBefore;      
+        uint256 sfBefore;        
+        uint256 totalUsdtValue;  
+        uint256 halfUsdtValue;   
+        uint256 usdtFromPool1;  
+        uint256 sfFromPool2;     
+        uint256 usdtFromExchange; 
+        uint256 totalUsdtForUser; 
+        uint256 actualSFK1Used;   
+        uint256 actualSFK2Used;   
     }
 
     function unstake(uint256 index) external onlyEOA nonReentrant returns (uint256) {
@@ -925,9 +869,8 @@ contract Staking is Referral,Owned,ReentrancyGuard {
         v.usdtBefore = USDT.balanceOf(address(this));
         v.sfBefore = SF.balanceOf(address(this));
 
-        // 计算总 USDT 价值（v.reward 是 SFK 数量）
         v.totalUsdtValue = getUsdtAmountsOut(v.reward);
-        v.halfUsdtValue = v.totalUsdtValue / 2;  // 50% 分配
+        v.halfUsdtValue = v.totalUsdtValue / 2;  
 
         // 第一部分：从 USDT/SFK 池获取 USDT
         address[] memory pathUsdt = new address[](2);
@@ -936,26 +879,20 @@ contract Staking is Referral,Owned,ReentrancyGuard {
         uint256[] memory amountsInUsdt = ROUTER.getAmountsIn(v.halfUsdtValue, pathUsdt);
         uint256 requiredSFK1 = amountsInUsdt[0];
         
-        // 检查合约是否有足够的 SFK
+       
         require(v.sfkBefore >= requiredSFK1, "Insufficient SFK balance for USDT pool");
 
-        // 记录 swap 前的 SFK 余额
         uint256 sfkBeforeSwap1 = SFK.balanceOf(address(this));
         
-        // 从 USDT/SFK 池 swap SFK → USDT
         v.usdtFromPool1 = swapSFKForUSDT(requiredSFK1, address(this));
 
-        // 记录实际使用的 SFK 数量
         v.actualSFK1Used = sfkBeforeSwap1 - SFK.balanceOf(address(this));
 
         // 第二部分：从 SF/SFK 池获取 SF，通过 sfExchange 换成 USDT
-        // 通过 SFExchange 计算需要多少 SF 才能换到 v.halfUsdtValue 的 USDT
         uint256 requiredSF = sfExchange.calculateSFAmount(v.halfUsdtValue);
 
-        // 多使用 1% 的 SFK 去换取 SF
         uint256 requiredSFWithBuffer = requiredSF * 101 / 100;
         
-        // 计算需要多少 SFK 才能从 SF/SFK 池换到 requiredSF 数量的 SF
         address[] memory pathSfkToSf = new address[](2);
         pathSfkToSf[0] = address(SFK);
         pathSfkToSf[1] = address(SF);
@@ -969,46 +906,35 @@ contract Staking is Referral,Owned,ReentrancyGuard {
         v.sfFromPool2 = swapSFKForSF(requiredSFK2, address(this));
         v.actualSFK2Used = requiredSFK2;
 
-        // 通过 sfExchange 将 SF 换成 USDT
         SF.approve(address(sfExchange), type(uint256).max);
         if (v.sfFromPool2 >= requiredSF) {
             v.usdtFromExchange = sfExchange.exchangeSFForUSDT(v.sfFromPool2);
-            // 将多余的 SF 转给 SFExchange 作为储备
             uint256 sfRemaining = v.sfFromPool2 - requiredSF;
             if (sfRemaining > 0) {
                 SF.transfer(address(sfExchange), sfRemaining);
             }
         } else {
-            // 如果得到的 SF 少于需要的，全部使用
             v.usdtFromExchange = sfExchange.exchangeSFForUSDT(v.sfFromPool2);
-            
-            // 如果得到的 USDT 仍然不足，是否用合约余额补充，待定
         }
 
-        // 计算用户应得的 USDT
         v.totalUsdtForUser = v.usdtFromPool1 + v.usdtFromExchange;
 
-        // CEI模式：先更新状态
         address[] memory refs = getReferrals(msg.sender, maxD);
         for (uint256 i = 0; i < refs.length; ++i) {
             teamTotalInvestValue[refs[i]] -= v.stake;
         }
 
-        // 解压发出事件
         if(address(stakingReward) != address(0)){
             stakingReward.emitUnstakePerformanceUpdate(msg.sender, v.stake);
         }
         
         
-        // 计算收益部分（用于奖励分配）
         uint256 profitReward = 0;
         if (v.reward > v.stake) {
             profitReward = v.reward - v.stake;
         }
         
-        // 调用奖励分配逻辑（通过 StakingReward 合约）
         if (address(stakingReward) != address(0) && profitReward > 0) {
-            // 将收益转换为 USDT 价值
             uint256 profitUsdt = getUsdtAmountsOut(profitReward);
             if (profitUsdt > 0) {
                 stakingReward.newDistributionLogic(msg.sender, profitUsdt);
@@ -1018,16 +944,15 @@ contract Staking is Referral,Owned,ReentrancyGuard {
         // 执行外部调用
         USDT.transfer(msg.sender, v.totalUsdtForUser);
 
-        // 回收使用的 SFK 回到 Staking 合约
         SFK.recycleUSDT(v.actualSFK1Used);
         SFK.recycleSF(v.actualSFK2Used);
 
         // 触发事件：通知链下处理
         emit UnstakeSFToWhitelist(
             msg.sender, 
-            v.sfFromPool2,           // 发送到白名单的 SF 数量
-            v.halfUsdtValue,         // 期望的 USDT 价值
-            v.usdtFromExchange,      // 实际通过 exchange 得到的 USDT
+            v.sfFromPool2,           
+            v.halfUsdtValue,        
+            v.usdtFromExchange,      
             uint40(block.timestamp)
         );
         
@@ -1078,64 +1003,6 @@ contract Staking is Referral,Owned,ReentrancyGuard {
         emit RewardOnly(msg.sender, reward - amount, uint40(block.timestamp), index);
     }
 
-    // 取消单独提取收益，只能在unstake中提取收益
-    // // 提取收益逻辑 (逻辑不正确需要修改成 从SFK/USDT和SF/SFK池共同拿出一半的金额)
-    // function rewardOnly(uint256 index) external onlyEOA nonReentrant returns (uint256) {
-    //     Vars memory v;
-    //     (v.reward, v.stake) = calReward(index);
-    //     uint256 dvv = (v.reward - v.stake) * 30 / 100; 
-
-    //     v.sfBefore   = SFK.balanceOf(address(this));
-    //     v.usdtBefore  = USDT.balanceOf(address(this));
-
-    //     // 计算期望得到的 USDT 数量（v.reward 和 v.stake 是 SFK 数量，需要转换成 USDT）
-    //     // v.reward - v.stake + dvv 是收益部分（SFK 数量）
-    //     uint256 expectedUsdt = getUsdtAmountsOut(v.reward - v.stake + dvv);
-        
-    //     // 计算需要多少 SF 才能得到期望的 USDT 数量
-    //     address[] memory pathSF = new address[](2);
-    //     pathSF[0] = address(SF);
-    //     pathSF[1] = address(USDT);
-    //     uint256[] memory amountsIn = ROUTER.getAmountsIn(expectedUsdt, pathSF);
-    //     uint256 requiredSF = amountsIn[0];
-        
-    //     // 检查合约是否有足够的 SF
-    //     require(v.sfBefore >= requiredSF, "Insufficient SF balance");
-        
-    //     uint256 maxSFInput = v.sfBefore > requiredSF * 110 / 100 
-    //         ? requiredSF * 110 / 100  // 如果余额充足，使用 requiredSF + 10% 滑点
-    //         : v.sfBefore;  // 如果余额有限，使用全部余额
-        
-    //     ROUTER.swapTokensForExactTokens(
-    //         expectedUsdt,  // amountOut: 期望得到的 USDT 数量
-    //         maxSFInput,    // amountInMax: 最多支付的 SF 数量
-    //         pathSF,
-    //         address(this),
-    //         block.timestamp + 300
-    //     );
-
-    //     uint256 sfUsed = v.sfBefore - SF.balanceOf(address(this));
-    //     uint256 usdtGot = USDT.balanceOf(address(this)) - v.usdtBefore;
-
-    //     uint256 usdtForDev; 
-    //     uint256 usdtForUser; 
-    //     uint256 dvvUsdt = getUsdtAmountsOut(dvv);
-    //     if (usdtGot > dvvUsdt) {
-    //         usdtForDev  = dvvUsdt;
-    //         usdtForUser = usdtGot - usdtForDev;
-    //     } else {
-    //         usdtForDev  = (usdtGot * 30) / 100;
-    //         usdtForUser = usdtGot - usdtForDev;
-    //     }
-
-    //     // lastRewardTime 现在由 StakingReward 合约管理
-        
-    //     // 现在执行所有外部调用（Interactions）
-    //     // 用户得到usdtForUser（70%收益），剩余的30%保留在合约中，由上级手动领取
-    //     USDT.transfer(msg.sender, usdtForUser);
-    //     SF.recycle(sfUsed);
-    //     return v.reward - v.stake;
-    // }
 
     function sync() external {
         uint256 w_bal = IERC20(USDT).balanceOf(address(this));
@@ -1171,7 +1038,6 @@ contract Staking is Referral,Owned,ReentrancyGuard {
     }
 
     // ============ 新分配逻辑函数 ============
-    // 已移至 StakingReward 合约，通过 stakingReward 接口调用
     
     // 查询函数（委托给 StakingReward 合约）
     function getDirectReferralCount(address user) public view returns (uint256) {
