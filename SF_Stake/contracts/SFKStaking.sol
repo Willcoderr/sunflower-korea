@@ -133,8 +133,8 @@ contract Staking is Referral,Owned,ReentrancyGuard {
     event TeamLevelUpdated(address indexed user, uint256 previousLevel, uint256 newLevel, uint256 kpi, uint40 timestamp);
     
     uint256[3] rates = [1000000003463000000,1000000006917000000,1000000014950000000];
-    uint256[3] stakeDays = [1 minutes, 15 minutes, 30 minutes];
-    uint40 public constant timeStep = 1 minutes;
+    uint256[3] stakeDays = [1 days, 15days, 30 days];
+    uint40 public constant timeStep = 1 days;
 
     IUniswapV2Router02 constant ROUTER = IUniswapV2Router02(_ROUTER);
     IERC20 constant USDT = IERC20(_USDT);
@@ -157,11 +157,10 @@ contract Staking is Referral,Owned,ReentrancyGuard {
     // EOA地址提取相关状态变量
     address public eoaWithdrawAddress;  // EOA地址（可配置，由owner设置）
 
-    // 审计建议：decimals 和 totalSupply 可以考虑从 OpenZeppelin 导入（建议性更新）
  
     uint8 public constant decimals = 18;
-    string public constant name = "ComToken";
-    string public constant symbol = "ComToken";
+    string public constant name = "KoreaSFK";
+    string public constant symbol = "KoreaSFK";
 
     uint256 public totalSupply;
     mapping(address => uint256) public balances;
@@ -310,10 +309,8 @@ contract Staking is Referral,Owned,ReentrancyGuard {
         // uint256 num00 = (block.timestamp - startTime)/(timeStep);
         // amout0 = 100 ether + num00 * (30 ether );
 
-        // 计算经过了多少个24小时
         uint256 daysElapsed = (block.timestamp - startTime) / 1 days;
         
-        // 初始200U，每24小时递增100U
         amout0 = 200 ether + daysElapsed * (100 ether);
 
         if(amout0 > 2000 ether) amout0 = 2000 ether;
@@ -324,34 +321,26 @@ contract Staking is Referral,Owned,ReentrancyGuard {
         uint256 lastIn = network1In();  // 最近1分钟的入场量
         uint256 canStakV = canStakeAmount();  // 每分钟可入场额度
         
-        // 如果最近1分钟入场量超过额度，返回0
         if(lastIn > canStakV) return 0;
         
-        // 计算剩余可入场额度
         uint256 remaining = canStakV - lastIn;
         
-        // 获取底池USDT储备
         uint256 reverseu = SFK.getReserveUSDT();
         uint256 sfReserve = getSFSFK_SFReserve(); // 获取池子里边有多少SF
         uint256 usdtOut = quoteSFInUSDT(sfReserve); // SF转换成USDT
         reverseu = reverseu + usdtOut ;
         
-        // 如果已达到2000U上限，使用底池0.2%的逻辑
         if(canStakV >= 2000 ether) {
-            // 计算底池的0.2% (reverseu * 2 / 1000 = reverseu / 500)
             uint256 poolLimit = reverseu / 500;
             
-            // 如果底池0.2% < 2000U，按2000U来
             if(poolLimit < 2000 ether) {
                 poolLimit = 2000 ether;
             }
             
-            // 取剩余额度与底池限制的较小值
             if(remaining > poolLimit) {
                 remaining = poolLimit;
             }
         } else {
-            // 未达到2000U时，使用底池的0.2%
             uint256 p1 = reverseu / 500;  // 底池的0.2%
             if(remaining > p1) {
                 remaining = p1;

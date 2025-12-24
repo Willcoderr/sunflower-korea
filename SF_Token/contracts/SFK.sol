@@ -487,8 +487,6 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
             uint256 finalAmount = amount - totalFee;
             super._transfer(sender, recipient, finalAmount);
     
-        } else {
-            // 普通转账，在外部处理
         }
     }
 
@@ -632,8 +630,6 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
             
             uint256 finalAmount = amount - totalFee;
             super._transfer(sender, recipient, finalAmount);
-        } else {
-            // 普通转账，在外部处理
         }
     }
 
