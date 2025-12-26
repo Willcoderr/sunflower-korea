@@ -1,10 +1,13 @@
+
+
+[dotenv@17.2.3] injecting env (4) from .env -- tip: ⚙️  override existing env vars with { override: true }
 // Sources flattened with hardhat v2.27.1 https://hardhat.org
 
 // SPDX-License-Identifier: AGPL-3.0-only AND MIT AND UNLICENSED
 
 // File @uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router01.sol@v1.1.0-beta.0
 
-pragma solidity >=0.8.20 <0.8.25;
+pragma solidity >=0.6.2;
 
 interface IUniswapV2Router01 {
     function factory() external pure returns (address);
@@ -326,12 +329,6 @@ abstract contract ReentrancyGuard {
 // Original license: SPDX_License_Identifier: UNLICENSED
 pragma solidity ^0.8.20;
 
-// 主网
-// address constant _USDT = 0x55d398326f99059fF775485246999027B3197955; // USDT
-// address constant _SF = 0x8b07a652203905240a3b9759627f17d6e8F14994; // SF Token
-// address constant _ROUTER = 0x10ED43C718714eb63d5aA57B78B54704E256024E; // PancakeSwap Router
-// address constant FUND_ADDRESS = 0xb966801b01b3EE8DafB0e4cf0FbDa5fEbC0FA1F7; // Fund Address
-
 address constant _USDT = 0xC6961C826cAdAC9b85F444416D3bf0Ca2a1c38CA; // MUSDT
 address constant _SF = 0x9af8d66Fc14beC856896771fD7D2DB12b41ED9E8; // SF Token
 address constant _SFK = 0xb362f8372cE0EF2265E9988292d17abfEB96473f; // SFK Token
@@ -414,100 +411,20 @@ interface ISFExchange {
     event ReserveThresholdUpdated(uint256 minSFReserve, uint256 minUSDTReserve);
     event SfSwapAddressUpdated(address indexed oldAddress, address indexed newAddress);
     event UsdtSwapAddressUpdated(address indexed oldAddress, address indexed newAddress);
-    
-    // ============ Core Functions ============
-    
-    /**
-     * @dev 质押时：USDT → SF（无税）
-     * @param usdtAmount USDT 数量
-     * @return sfAmount 返回的 SF 数量
-     * @notice 只能由授权的质押合约调用
-     */
+
     function exchangeUSDTForSF(uint256 usdtAmount) external returns (uint256 sfAmount);
-    
-    /**
-     * @dev 解押时：SF → USDT
-     * @param sfAmount SF 数量
-     * @return usdtAmount 返回的 USDT 数量
-     * @notice 只能由授权的质押合约调用
-     */
     function exchangeSFForUSDT(uint256 sfAmount) external returns (uint256 usdtAmount);
-    
-    // ============ Admin Functions ============
-    
-    /**
-     * @dev 白名单充值（链下购买后转入）
-     * @param sfAmount SF 数量
-     * @param usdtAmount USDT 数量
-     * @notice 只能由 owner 调用
-     */
     function depositFromWhitelist(uint256 sfAmount, uint256 usdtAmount) external;
-    
-    /**
-     * @dev 设置质押合约地址
-     * @param _stakingContract 新的质押合约地址
-     */
     function setStakingContract(address _stakingContract) external;
-    
-    /**
-     * @dev 设置最小储备金阈值
-     * @param _minSFReserve 最小 SF 储备
-     * @param _minUSDTReserve 最小 USDT 储备
-     */
     function setReserveThresholds(uint256 _minSFReserve, uint256 _minUSDTReserve) external;
-    
-    /**
-     * @dev 紧急提取（仅 owner）
-     * @param token 代币地址
-     * @param amount 提取数量
-     * @param to 接收地址
-     */
     function emergencyWithdraw(address token, uint256 amount, address to) external;
-    
-    // ============ View Functions ============
-    
-    /**
-     * @dev 计算兑换价格（基于 SF/USDT 池）
-     * @param usdtAmount USDT 数量
-     * @return SF 数量
-     */
     function calculateSFAmount(uint256 usdtAmount) external view returns (uint256);
-    
-    /**
-     * @dev 计算兑换价格（基于 SF/USDT 池）
-     * @param sfAmount SF 数量
-     * @return USDT 数量
-     */
     function calculateUSDTAmount(uint256 sfAmount) external view returns (uint256);
-    
-    /**
-     * @dev 查询储备金状态
-     * @return sfBalance SF 余额
-     * @return usdtBalance USDT 余额
-     * @return sfSufficient SF 储备是否充足
-     * @return usdtSufficient USDT 储备是否充足
-     */
     function getReserveStatus() external view returns (
         uint256 sfBalance,
         uint256 usdtBalance,
         bool sfSufficient,
         bool usdtSufficient
-    );
-    
-    /**
-     * @dev 获取配置参数
-     * @return _minSFReserve 最小 SF 储备
-     * @return _minUSDTReserve 最小 USDT 储备
-     * @return _stakingContract 质押合约地址
-     * @return _sfSwapAddress SF 交换地址
-     * @return _usdtSwapAddress USDT 交换地址
-     */
-    function getConfig() external view returns (
-        uint256 _minSFReserve,
-        uint256 _minUSDTReserve,
-        address _stakingContract,
-        address _sfSwapAddress,
-        address _usdtSwapAddress
     );
 }
 
@@ -565,18 +482,6 @@ abstract contract Owned {
 // Original license: SPDX_License_Identifier: UNLICENSED
 pragma solidity >=0.8.20 <0.8.25;
 
-/**
- * @title SF Exchange Contract (中间合约)
- * @notice 白名单地址无税购买 SF 后存入，供质押合约使用
- * 
- * 核心功能：
- * 1. 白名单充值 SF（链下购买后转入）
- * 2. 接收 USDT，转出 SF（给质押用户，无税）
- * 3. 接收 SF，转出 USDT（解押时回收 SF）
- * 4. 动态兑换比例（基于 SF/USDT 池价格）
- * 5. 储备金管理（USDT 和 SF 余额监控）
- */
-
 
 
 
@@ -607,11 +512,6 @@ contract SFExchange is ISFExchange, Owned, ReentrancyGuard {
         _;
     }
     
-    /**
-     * @dev 质押时：USDT → SF（无税）
-     * @param usdtAmount USDT 数量
-     * @return sfAmount 返回的 SF 数量
-     */
     function exchangeUSDTForSF(uint256 usdtAmount) external override onlyStaking nonReentrant returns (uint256 sfAmount) {
         require(usdtAmount > 0, "Amount must be greater than 0");
 
@@ -634,11 +534,6 @@ contract SFExchange is ISFExchange, Owned, ReentrancyGuard {
         emit ExchangeUSDTForSF(msg.sender, usdtAmount, sfAmount);
     }
     
-    /**
-     * @dev 解押时：SF → USDT
-     * @param sfAmount SF 数量
-     * @return usdtAmount 返回的 USDT 数量
-     */
     function exchangeSFForUSDT(uint256 sfAmount) external override onlyStaking nonReentrant returns (uint256 usdtAmount) {
         require(sfAmount > 0, "Amount must be greater than 0");
 
@@ -675,10 +570,7 @@ contract SFExchange is ISFExchange, Owned, ReentrancyGuard {
         emit WhitelistDeposit(msg.sender, sfAmount, usdtAmount);
     }
 
-    /**
-     * @dev 设置SF白名单地址
-     * @param _sfSwapAddress SF白名单地址（用于接收USDT并购买SF）
-     */
+
     function setSfSwapAddress(address _sfSwapAddress) external onlyOwner {
         require(_sfSwapAddress != address(0), "Invalid address");
         address oldAddress = sfSwapAddress;
@@ -686,20 +578,13 @@ contract SFExchange is ISFExchange, Owned, ReentrancyGuard {
         emit SfSwapAddressUpdated(oldAddress, _sfSwapAddress);
     }
 
-    /**
-     * @dev 设置USDT补充地址
-     * @param _usdtSwapAddress USDT补充地址（用于接收SF并购买USDT）
-     */
     function setUsdtSwapAddress(address _usdtSwapAddress) external onlyOwner {
         require(_usdtSwapAddress != address(0), "Invalid address");
         address oldAddress = usdtSwapAddress;
         usdtSwapAddress = _usdtSwapAddress;
         emit UsdtSwapAddressUpdated(oldAddress, _usdtSwapAddress);
     }
-    
-    /**
-     * @dev 设置质押合约地址
-     */
+
     function setStakingContract(address _stakingContract) external override onlyOwner {
         require(_stakingContract != address(0), "Invalid address");
         address oldContract = stakingContract;
@@ -707,9 +592,6 @@ contract SFExchange is ISFExchange, Owned, ReentrancyGuard {
         emit StakingContractUpdated(oldContract, _stakingContract);
     }
     
-    /**
-     * @dev 设置最小储备金阈值
-     */
     function setReserveThresholds(uint256 _minSFReserve, uint256 _minUSDTReserve) external override onlyOwner {
         require(_minSFReserve <= type(uint256).max / 2, "minSFReserve too large");
         require(_minUSDTReserve <= type(uint256).max / 2, "minUSDTReserve too large");
@@ -717,10 +599,7 @@ contract SFExchange is ISFExchange, Owned, ReentrancyGuard {
         minUSDTReserve = _minUSDTReserve;
         emit ReserveThresholdUpdated(_minSFReserve, _minUSDTReserve);
     }
-    
-    /**
-     * @dev 紧急提取（仅 owner）
-     */
+
     function emergencyWithdraw(address token, uint256 amount, address to) external override onlyOwner nonReentrant {
         require(token != address(0), "Invalid token address");
         require(to != address(0), "Invalid recipient");
@@ -728,11 +607,7 @@ contract SFExchange is ISFExchange, Owned, ReentrancyGuard {
         IERC20(token).transfer(to, amount);
     }
     
-    /**
-     * @dev 计算兑换价格（使用 Uniswap Router）
-     * @param usdtAmount USDT 数量
-     * @return SF 数量（已自动处理 token 顺序、滑点和手续费）
-     */
+
     function calculateSFAmount(uint256 usdtAmount) public view override returns (uint256) {
         require(usdtAmount > 0, "Amount must be greater than 0");
         
@@ -744,11 +619,6 @@ contract SFExchange is ISFExchange, Owned, ReentrancyGuard {
         return amountsOut[1];
     }
     
-    /**
-     * @dev 计算反向兑换价格（使用 Uniswap Router）
-     * @param sfAmount SF 数量
-     * @return USDT 数量（已自动处理 token 顺序、滑点和手续费）
-     */
     function calculateUSDTAmount(uint256 sfAmount) public view override returns (uint256) {
         require(sfAmount > 0, "Amount must be greater than 0");
         
@@ -760,9 +630,6 @@ contract SFExchange is ISFExchange, Owned, ReentrancyGuard {
         return amountsOut[1];
     }
     
-    /**
-     * @dev 查询储备金状态
-     */
     function getReserveStatus() external view override returns (
         uint256 sfBalance,
         uint256 usdtBalance,
@@ -775,10 +642,7 @@ contract SFExchange is ISFExchange, Owned, ReentrancyGuard {
         usdtSufficient = usdtBalance >= minUSDTReserve;
     }
     
-    /**
-     * @dev 获取配置参数
-     */
-    function getConfig() external view override returns (
+    function getConfig() external view returns (
         uint256 _minSFReserve,
         uint256 _minUSDTReserve,
         address _stakingContract,

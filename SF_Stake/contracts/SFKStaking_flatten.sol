@@ -1,12 +1,13 @@
 
 
+[dotenv@17.2.3] injecting env (4) from .env -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
 // Sources flattened with hardhat v2.27.1 https://hardhat.org
 
 // SPDX-License-Identifier: AGPL-3.0-only AND MIT AND UNLICENSED
 
 // File @uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router01.sol@v1.1.0-beta.0
 
-pragma solidity >=0.8.20 <0.8.25;
+pragma solidity >=0.6.2;
 
 interface IUniswapV2Router01 {
     function factory() external pure returns (address);
@@ -384,12 +385,6 @@ interface IUniswapV2Pair {
 // Original license: SPDX_License_Identifier: UNLICENSED
 pragma solidity ^0.8.20;
 
-// 主网
-// address constant _USDT = 0x55d398326f99059fF775485246999027B3197955; // USDT
-// address constant _SF = 0x8b07a652203905240a3b9759627f17d6e8F14994; // SF Token
-// address constant _ROUTER = 0x10ED43C718714eb63d5aA57B78B54704E256024E; // PancakeSwap Router
-// address constant FUND_ADDRESS = 0xb966801b01b3EE8DafB0e4cf0FbDa5fEbC0FA1F7; // Fund Address
-
 address constant _USDT = 0xC6961C826cAdAC9b85F444416D3bf0Ca2a1c38CA; // MUSDT
 address constant _SF = 0x9af8d66Fc14beC856896771fD7D2DB12b41ED9E8; // SF Token
 address constant _SFK = 0xb362f8372cE0EF2265E9988292d17abfEB96473f; // SFK Token
@@ -472,100 +467,20 @@ interface ISFExchange {
     event ReserveThresholdUpdated(uint256 minSFReserve, uint256 minUSDTReserve);
     event SfSwapAddressUpdated(address indexed oldAddress, address indexed newAddress);
     event UsdtSwapAddressUpdated(address indexed oldAddress, address indexed newAddress);
-    
-    // ============ Core Functions ============
-    
-    /**
-     * @dev 质押时：USDT → SF（无税）
-     * @param usdtAmount USDT 数量
-     * @return sfAmount 返回的 SF 数量
-     * @notice 只能由授权的质押合约调用
-     */
+
     function exchangeUSDTForSF(uint256 usdtAmount) external returns (uint256 sfAmount);
-    
-    /**
-     * @dev 解押时：SF → USDT
-     * @param sfAmount SF 数量
-     * @return usdtAmount 返回的 USDT 数量
-     * @notice 只能由授权的质押合约调用
-     */
     function exchangeSFForUSDT(uint256 sfAmount) external returns (uint256 usdtAmount);
-    
-    // ============ Admin Functions ============
-    
-    /**
-     * @dev 白名单充值（链下购买后转入）
-     * @param sfAmount SF 数量
-     * @param usdtAmount USDT 数量
-     * @notice 只能由 owner 调用
-     */
     function depositFromWhitelist(uint256 sfAmount, uint256 usdtAmount) external;
-    
-    /**
-     * @dev 设置质押合约地址
-     * @param _stakingContract 新的质押合约地址
-     */
     function setStakingContract(address _stakingContract) external;
-    
-    /**
-     * @dev 设置最小储备金阈值
-     * @param _minSFReserve 最小 SF 储备
-     * @param _minUSDTReserve 最小 USDT 储备
-     */
     function setReserveThresholds(uint256 _minSFReserve, uint256 _minUSDTReserve) external;
-    
-    /**
-     * @dev 紧急提取（仅 owner）
-     * @param token 代币地址
-     * @param amount 提取数量
-     * @param to 接收地址
-     */
     function emergencyWithdraw(address token, uint256 amount, address to) external;
-    
-    // ============ View Functions ============
-    
-    /**
-     * @dev 计算兑换价格（基于 SF/USDT 池）
-     * @param usdtAmount USDT 数量
-     * @return SF 数量
-     */
     function calculateSFAmount(uint256 usdtAmount) external view returns (uint256);
-    
-    /**
-     * @dev 计算兑换价格（基于 SF/USDT 池）
-     * @param sfAmount SF 数量
-     * @return USDT 数量
-     */
     function calculateUSDTAmount(uint256 sfAmount) external view returns (uint256);
-    
-    /**
-     * @dev 查询储备金状态
-     * @return sfBalance SF 余额
-     * @return usdtBalance USDT 余额
-     * @return sfSufficient SF 储备是否充足
-     * @return usdtSufficient USDT 储备是否充足
-     */
     function getReserveStatus() external view returns (
         uint256 sfBalance,
         uint256 usdtBalance,
         bool sfSufficient,
         bool usdtSufficient
-    );
-    
-    /**
-     * @dev 获取配置参数
-     * @return _minSFReserve 最小 SF 储备
-     * @return _minUSDTReserve 最小 USDT 储备
-     * @return _stakingContract 质押合约地址
-     * @return _sfSwapAddress SF 交换地址
-     * @return _usdtSwapAddress USDT 交换地址
-     */
-    function getConfig() external view returns (
-        uint256 _minSFReserve,
-        uint256 _minUSDTReserve,
-        address _stakingContract,
-        address _sfSwapAddress,
-        address _usdtSwapAddress
     );
 }
 
@@ -763,30 +678,12 @@ abstract contract Referral{
         require(!_isBound[_user], "BOUND");
         require(_isBound[_referral], "PARENT_NOT_BOUND");
 
-        // 检测是否形成循环
-        require(!_wouldCreateCycle(_user, _referral), "CYCLE_DETECTED");
-
         _parentOf[_user] = _referral;
         _isBound[_user] = true;
         _allUsers.push(_user);
         unchecked { _directCount[_referral] += 1; }
 
         emit BindReferral(_user, _referral);
-    }
-
-    function _wouldCreateCycle(address newUser, address parent) private view returns (bool) {
-        address current = parent;
-        uint256 depth = 0;
-        uint256 maxDepth = 100; // 设置合理的最大深度
-        
-        while (current != address(0) && depth < maxDepth) {
-            if (current == newUser) {
-                return true;
-            }
-            current = _parentOf[current];
-            depth++;
-        }
-        return false;
     }
 
     function getReferrals(address _address, uint256 _num)public view returns(address[] memory) {
@@ -837,20 +734,11 @@ contract Staking is Referral,Owned,ReentrancyGuard {
     // event RankingReward(address indexed user, uint256 rewardType, uint256 reward, uint40 timestamp);
     event TeamLevelUpdated(address indexed user, uint256 previousLevel, uint256 newLevel, uint256 kpi, uint40 timestamp);
     
-
-    // ============ 原正式配置（已注释）============
     // 收益率配置：1天期每天0.3%，15天期每天0.6%，30天期每天1.3%
     // 每秒复利因子计算：(1 + 日收益率)^(1/86400)
-    // uint256[3] rates = [1000000003463000000,1000000006917000000,1000000014950000000];
-    // uint256[3] stakeDays = [1 days, 15 days, 30 days];
-    // uint40 public constant timeStep = 1 days;
-    
-    // ============ 测试模式配置 ============
-    // 测试模式：时间段改为1分钟、15分钟、30分钟
-    // 收益率配置保持不变（使用相同的复利因子）
     uint256[3] rates = [1000000003463000000,1000000006917000000,1000000014950000000];
-    uint256[3] stakeDays = [1 minutes, 15 minutes, 30 minutes];
-    uint40 public constant timeStep = 1 minutes;
+    uint256[3] stakeDays = [1 days, 15 days, 30 days];
+    uint40 public constant timeStep = 1 days;
 
     IUniswapV2Router02 constant ROUTER = IUniswapV2Router02(_ROUTER);
     IERC20 constant USDT = IERC20(_USDT);
@@ -872,8 +760,6 @@ contract Staking is Referral,Owned,ReentrancyGuard {
 
     // EOA地址提取相关状态变量
     address public eoaWithdrawAddress;  // EOA地址（可配置，由owner设置）
-
-    // 审计建议：decimals 和 totalSupply 可以考虑从 OpenZeppelin 导入（建议性更新）
  
     uint8 public constant decimals = 18;
     string public constant name = "ComToken";
@@ -890,20 +776,17 @@ contract Staking is Referral,Owned,ReentrancyGuard {
     mapping(address => uint256) public teamTotalInvestValue;
     mapping(address => uint256) public teamVirtuallyInvestValue;
 
-    uint8 constant maxD = 30;
+    uint8 constant maxD = 2;
 
     RecordTT[] public t_supply;
     uint256 public mMinSwapRatioUsdt = 50;//100
     uint256 public mMinSwapRatioToken = 50;//100
     uint256 startTime=0;
-    // uint256 constant network1InTime=90 days;  // 原正式配置
-    uint256 constant network1InTime=90 minutes;  // 测试模式：改为90分钟
+    uint256 constant network1InTime=90 days;
     bool bStart = false;
     
-    // 优化：使用10秒时间桶记录质押量，实现精确的滑动窗口查询
-    // 10秒桶索引计算：bucketIndex = block.timestamp / 10 seconds
     mapping(uint256 => uint256) public tenSecondStakeAmount;  // bucketIndex => 该10秒的累计质押量
-    uint256 public lastUpdatedBucket;  // 最后更新的10秒桶索引
+    uint256 public lastUpdatedBucket;
 
     struct RecordTT {
         uint40 stakeTime;
@@ -925,12 +808,6 @@ contract Staking is Referral,Owned,ReentrancyGuard {
 
     constructor() Owned(msg.sender) {
         USDT.approve(address(ROUTER), type(uint256).max);
-
-        // SFErc20 = ISFErc20(0x8b07a652203905240a3b9759627f17d6e8f14994);
-        // SFErc20.approve(address(ROUTER), type(uint256).max);
-
-        // ISFK = ISFK(address(0x8b07a652203905240a3b9759627f17d6e8F14994));
-        // ISFK.approve(address(ROUTER), type(uint256).max);
     }
 
     function setSF(address _sf) external onlyOwner {
@@ -1006,10 +883,6 @@ contract Staking is Referral,Owned,ReentrancyGuard {
         lastUpdatedBucket = currentBucket;
     }
     
-    /**
-     * @dev 获取最近1分钟的质押量（滑动窗口：block.timestamp - 1 minutes 到 block.timestamp）
-     * 使用10秒时间桶，实现精确的滑动窗口查询，O(6)复杂度
-     */
     function network1In() public view returns (uint256 value) {
         if(block.timestamp > startTime+network1InTime) {
             return 0 ether;
@@ -1035,8 +908,6 @@ contract Staking is Referral,Owned,ReentrancyGuard {
         uint256 amout0=0;
         if(startTime==0) return amout0;
         if(block.timestamp < startTime) return amout0;
-        // uint256 num00 = (block.timestamp - startTime)/(timeStep);
-        // amout0 = 100 ether + num00 * (30 ether );
 
         // 计算经过了多少个24小时
         uint256 daysElapsed = (block.timestamp - startTime) / 1 days;
@@ -1047,16 +918,7 @@ contract Staking is Referral,Owned,ReentrancyGuard {
         if(amout0 > 2000 ether) amout0 = 2000 ether;
         return amout0;
     }
-    // function maxStakeAmount() public view returns (uint256) {
-    //     uint256 lastIn = network1In();
-    //     uint256 canStakV = canStakeAmount();
-    //     if(lastIn>canStakV) return 0;
-    //     lastIn=canStakV - lastIn;
-    //     uint112 reverseu = SFK.getReserveUSDT();
-    //     uint256 p1 = reverseu / 100;
-    //     if (lastIn > p1) lastIn = p1;
-    //     return lastIn;
-    // }
+
     function maxStakeAmount() public view returns (uint256) {
         uint256 lastIn = network1In();  // 最近1分钟的入场量
         uint256 canStakV = canStakeAmount();  // 每分钟可入场额度
@@ -1144,8 +1006,8 @@ contract Staking is Referral,Owned,ReentrancyGuard {
     function userStakeCount(address user) external view returns (uint256 count) {
         count = userStakeRecord[user].length;
     }
-    // 审计合约 SF-44 提取函数公共部分
-    // 内部函数：计算单个质押记录的详细信息
+
+    // 计算单个质押记录的详细信息
     function _getStakeRecordInfo(Record storage user_record, uint256 currentTime) private view returns (
         uint256 reward,
         uint256 canEndData,
@@ -1247,11 +1109,10 @@ contract Staking is Referral,Owned,ReentrancyGuard {
             bindReferral(parent, user);
         }
         
-        // 检查用户是否已绑定推荐关系（必须绑定才能质押）
         require(isBindReferral(user), "Must bind referral");
-        // 添加流动性
+
         swapAndAddLiquidity(_amount);
-        // 铸造NFT
+
         mint(user, _amount, _stakeIndex);
     }
     
@@ -1295,13 +1156,6 @@ contract Staking is Referral,Owned,ReentrancyGuard {
         );
     }
             
-    /**
-     * 流程：
-     * 1. USDT/SFK 池（500 USDT）：250 USDT 换 SFK + 250 USDT 添加流动性
-     * 2. SF/SFK 池（500 USDT）：
-     *    - 500 USDT 通过 sfExchange 换取 SF（无税）
-     *    - 50% SF 换 SFK + 50% SF 添加流动性到 SF/SFK 池
-     */
     function swapAndAddLiquidity(uint160 _amount) private {
         require(address(sfExchange) != address(0), "SFExchange not set");
         
@@ -1324,12 +1178,6 @@ contract Staking is Referral,Owned,ReentrancyGuard {
         addLiquidityUSDTSFK(usdtForLiquidity, sfkAmount1, address(0xdead));
 
         // ============ 第二部分：SF/SFK 流动性池 ============
-        // 计算剩余的 50% USDT（500U）价值多少 SF
-        // uint256 requiredSF = calculateRequiredSF(halfAmount);
-        
-        // // 检查合约中是否有足够的 SF
-        // require(SF.balanceOf(address(this)) >= requiredSF, "Insufficient SF in contract");
-
         // 先用剩余的 50% USDT 通过 sfExchange 换取 SF（无税）
         USDT.approve(address(sfExchange), halfAmount);
         uint256 actualSF = sfExchange.exchangeUSDTForSF(halfAmount);
@@ -1346,12 +1194,6 @@ contract Staking is Referral,Owned,ReentrancyGuard {
         
         // 用 50% 的 SF + 换到的 SFK 组成 LP，添加到 SF/SFK 交易对
         addLiquiditySFSFK(sfForLiquidity, sfkAmount, address(0xdead));
-        
-        // // ============ 第三部分：将剩余的 500U 转给 EOA 地址 ============
-        // // 直接将剩余的 50% USDT（500U）转给 EOA 地址（gas费由调用stake的用户支付）
-        // if (eoaWithdrawAddress != address(0)) {
-        //     USDT.transfer(eoaWithdrawAddress, halfAmount);
-        // }
     }
     
     function swapSFKForSF(uint256 sfkAmount, address to) private returns (uint256) {
@@ -1526,8 +1368,7 @@ contract Staking is Referral,Owned,ReentrancyGuard {
         uint256 stake_amount = user_record.amount;
         uint40 stake_time = user_record.stakeTime;
         uint40 endTime = uint40(block.timestamp);
-        // if(endTime>user_record.oriStakeTime+30*timeStep) 
-        //     endTime=user_record.oriStakeTime+30*timeStep;
+
         // 按照动态质押期限计算
         uint256 maxStakeDuration = stakeDays[user_record.stakeIndex];
         if(endTime > user_record.oriStakeTime + maxStakeDuration) {
@@ -1540,7 +1381,6 @@ contract Staking is Referral,Owned,ReentrancyGuard {
         }
 
         uint40 stake_period = endTime - stake_time;
-        // stake_period = stake_period > 30*timeStep ? 30*timeStep : stake_period;
 
         // 按照动态质押期限计算
         uint40 maxPeriod = uint40(maxStakeDuration);
@@ -1647,8 +1487,6 @@ contract Staking is Referral,Owned,ReentrancyGuard {
         } else {
             // 如果得到的 SF 少于需要的，全部使用
             v.usdtFromExchange = sfExchange.exchangeSFForUSDT(v.sfFromPool2);
-            
-            // 如果得到的 USDT 仍然不足，是否用合约余额补充，待定
         }
 
         // 计算用户应得的 USDT
@@ -1744,65 +1582,6 @@ contract Staking is Referral,Owned,ReentrancyGuard {
         emit RewardOnly(msg.sender, reward - amount, uint40(block.timestamp), index);
     }
 
-    // 取消单独提取收益，只能在unstake中提取收益
-    // // 提取收益逻辑 (逻辑不正确需要修改成 从SFK/USDT和SF/SFK池共同拿出一半的金额)
-    // function rewardOnly(uint256 index) external onlyEOA nonReentrant returns (uint256) {
-    //     Vars memory v;
-    //     (v.reward, v.stake) = calReward(index);
-    //     uint256 dvv = (v.reward - v.stake) * 30 / 100; 
-
-    //     v.sfBefore   = SFK.balanceOf(address(this));
-    //     v.usdtBefore  = USDT.balanceOf(address(this));
-
-    //     // 计算期望得到的 USDT 数量（v.reward 和 v.stake 是 SFK 数量，需要转换成 USDT）
-    //     // v.reward - v.stake + dvv 是收益部分（SFK 数量）
-    //     uint256 expectedUsdt = getUsdtAmountsOut(v.reward - v.stake + dvv);
-        
-    //     // 计算需要多少 SF 才能得到期望的 USDT 数量
-    //     address[] memory pathSF = new address[](2);
-    //     pathSF[0] = address(SF);
-    //     pathSF[1] = address(USDT);
-    //     uint256[] memory amountsIn = ROUTER.getAmountsIn(expectedUsdt, pathSF);
-    //     uint256 requiredSF = amountsIn[0];
-        
-    //     // 检查合约是否有足够的 SF
-    //     require(v.sfBefore >= requiredSF, "Insufficient SF balance");
-        
-    //     uint256 maxSFInput = v.sfBefore > requiredSF * 110 / 100 
-    //         ? requiredSF * 110 / 100  // 如果余额充足，使用 requiredSF + 10% 滑点
-    //         : v.sfBefore;  // 如果余额有限，使用全部余额
-        
-    //     ROUTER.swapTokensForExactTokens(
-    //         expectedUsdt,  // amountOut: 期望得到的 USDT 数量
-    //         maxSFInput,    // amountInMax: 最多支付的 SF 数量
-    //         pathSF,
-    //         address(this),
-    //         block.timestamp + 300
-    //     );
-
-    //     uint256 sfUsed = v.sfBefore - SF.balanceOf(address(this));
-    //     uint256 usdtGot = USDT.balanceOf(address(this)) - v.usdtBefore;
-
-    //     uint256 usdtForDev; 
-    //     uint256 usdtForUser; 
-    //     uint256 dvvUsdt = getUsdtAmountsOut(dvv);
-    //     if (usdtGot > dvvUsdt) {
-    //         usdtForDev  = dvvUsdt;
-    //         usdtForUser = usdtGot - usdtForDev;
-    //     } else {
-    //         usdtForDev  = (usdtGot * 30) / 100;
-    //         usdtForUser = usdtGot - usdtForDev;
-    //     }
-
-    //     // lastRewardTime 现在由 StakingReward 合约管理
-        
-    //     // 现在执行所有外部调用（Interactions）
-    //     // 用户得到usdtForUser（70%收益），剩余的30%保留在合约中，由上级手动领取
-    //     USDT.transfer(msg.sender, usdtForUser);
-    //     SF.recycle(sfUsed);
-    //     return v.reward - v.stake;
-    // }
-
     function sync() external {
         uint256 w_bal = IERC20(USDT).balanceOf(address(this));
         address pair = SF.uniswapV2Pair();
@@ -1835,9 +1614,6 @@ contract Staking is Referral,Owned,ReentrancyGuard {
         bStart = tbstart;
         startTime = startT;
     }
-
-    // ============ 新分配逻辑函数 ============
-    // 已移至 StakingReward 合约，通过 stakingReward 接口调用
     
     // 查询函数（委托给 StakingReward 合约）
     function getDirectReferralCount(address user) public view returns (uint256) {

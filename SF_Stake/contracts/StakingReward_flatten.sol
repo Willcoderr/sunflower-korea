@@ -1,3 +1,6 @@
+
+
+[dotenv@17.2.3] injecting env (4) from .env -- tip: ⚙️  enable debug logging with { debug: true }
 // Sources flattened with hardhat v2.27.1 https://hardhat.org
 
 // SPDX-License-Identifier: AGPL-3.0-only AND MIT AND UNLICENSED
@@ -7,7 +10,7 @@
 // Original license: SPDX_License_Identifier: MIT
 // OpenZeppelin Contracts (last updated v5.4.0) (token/ERC20/IERC20.sol)
 
-pragma solidity >=0.8.20 <0.8.25;
+pragma solidity >=0.4.16;
 
 /**
  * @dev Interface of the ERC-20 standard as defined in the ERC.
@@ -187,50 +190,42 @@ pragma solidity >=0.8.20 <0.8.25;
 
 
 
-
 contract StakingReward is Owned {
-    // 关联的 Staking 合约
     IStaking public stakingContract;
 
-    // 代币地址
+    uint40 maxReferralCount = 2;
+    uint40 maxDepth = 2;
+
     IERC20 public USDT;
     address public profitAddress;
     address public fundAddress;
 
-    // 用户是否解锁成为推荐人
     mapping(address => bool) public isUnlocked;
 
-
-    // 直推关系相关
     mapping(address => uint256) public directReferralCount;
     mapping(address => uint256) public directReferralPerformance;
     mapping(address => address[]) private directReferralList;
     mapping(address => mapping(address => bool)) private isDirectReferral;
     mapping(address => uint256) public qualifiedDirectReferralCount;
 
-    // 团队等级相关
     mapping(address => uint256) public teamLevel;
     mapping(address => uint256) public lastRewardTime;
     mapping(address => mapping(uint256 => uint256)) public departmentLevel;
 
-    // 部门统计
     mapping(address => uint256) public level3DeptCount;
     mapping(address => uint256) public level4DeptCount;
     mapping(address => uint256) public level5DeptCount;
     mapping(address => mapping(address => uint256)) public departmentVolume;
     mapping(address => mapping(address => uint256)) public departmentLevelMap;
 
-    // 收益累计
     mapping(address => uint256) public newReferralProfitSum;
     mapping(address => uint256) public newTeamProfitSum;
 
-    // 已分配记录（避免重复分配）
     mapping(address => mapping(address => uint256))
         private claimedReferralRewardByUser;
     mapping(address => mapping(address => uint256))
         private claimedTeamRewardByUser;
 
-    // 事件
     event NewReferralReward(
         address indexed user,
         address indexed referral,
@@ -268,7 +263,6 @@ contract StakingReward is Owned {
 
     event BatchLevelUpdate(address[] users, uint256[] levels, uint40 timestamp);
 
-    // 接口定义（通过接口直接调用 Staking 合约）
     function _getReferral(address user) private view returns (address) {
         return stakingContract.getReferral(user);
     }
@@ -313,7 +307,6 @@ contract StakingReward is Owned {
         stakingContract = IStaking(_staking);
     }
 
-    // ============ 直推关系维护 ============
     function getQualifiedDirectReferralCount(
         address user
     ) public view returns (uint256) {
@@ -326,8 +319,7 @@ contract StakingReward is Owned {
     ) external onlyStaking {
         address parent = _getReferral(user);
         if (parent != address(0)) {
-
-            bool wasUnlocked = isUnlocked[user];  // 记录旧状态
+            bool wasUnlocked = isUnlocked[user];
             bool  isNewUser = !isDirectReferral[parent][user];
 
             if(isNewUser){
@@ -355,7 +347,6 @@ contract StakingReward is Owned {
 
             isUnlocked[user] = nowUnlocked;
 
-            // 发出事件，记录直推关系更新
             emit StakePerformanceUpdate(
                 user,
                 parent,
@@ -366,8 +357,6 @@ contract StakingReward is Owned {
         }
     }
 
-
-    // 解压发出事件
     function emitUnstakePerformanceUpdate(address user,uint256 amount) external onlyStaking {
         address parent = _getReferral(user);
         if(parent !=  address(0)){
@@ -375,6 +364,7 @@ contract StakingReward is Owned {
 
             uint256 newBalance = _getBalance(user);
             bool nowUnlocked = newBalance >= 200e18;
+
             if (wasUnlocked && !nowUnlocked) {
                 if (qualifiedDirectReferralCount[parent] > 0) {
                     qualifiedDirectReferralCount[parent]--;
@@ -440,15 +430,15 @@ contract StakingReward is Owned {
     ) public returns (uint256 distributed) {
         uint256 dynamicRewardPool = (profitReward * 30) / 100;
         distributed = 0;
-        uint256 totalReferralReward = (dynamicRewardPool * 10) / 100;
+        uint256 totalReferralReward = (dynamicRewardPool * maxReferralCount) / 100;
         uint256 perGenerationReward = dynamicRewardPool / 100;
 
-        address[] memory referrals = _getReferrals(_user, 10);
+        address[] memory referrals = _getReferrals(_user, maxReferralCount);
 
-        for (uint256 i = 0; i < referrals.length && i < 10; i++) {
+        for (uint256 i = 0; i < referrals.length && i < maxReferralCount; i++) {
             address referral = referrals[i];
             uint256 generation = i + 1;
-            // 使用计数器替代数组遍历
+
             uint256 qualifiedDirectCount = qualifiedDirectReferralCount[referral];
 
             if (qualifiedDirectCount >= generation) {
@@ -488,6 +478,7 @@ contract StakingReward is Owned {
         return distributed;
     }
 
+    // 处理团队收益分配, 需要级差处理。
     function newTeamReward(
         address _user,
         uint256 profitReward
@@ -496,31 +487,29 @@ contract StakingReward is Owned {
         uint256 totalTeamReward = (dynamicRewardPool * 18) / 100;
 
         address currentUser = _getReferral(_user);
-        uint256 maxDepth = 30;
         uint256 depth = 0;
-        uint256 distributedLevel = 0;
+        uint256 distributedLevel = 0; 
 
         while (currentUser != address(0) && depth < maxDepth) {
             uint256 level = getTeamLevel(currentUser);
 
             uint256 levelRate = level > 0 && level <= 6 ? level * 3 : 0;
+
             if (levelRate <= distributedLevel) {
                 currentUser = _getReferral(currentUser);
                 depth++;
                 continue;
             }
-            // 计算差额奖励
+
             uint256 diff = levelRate - distributedLevel;
             uint256 userReward = (totalTeamReward * diff) / 18;
 
-            // 如果奖励为0，跳过（减少嵌套）
             if (userReward == 0) {
                 currentUser = _getReferral(currentUser);
                 depth++;
                 continue;
             }
 
-            // 分配奖励
             uint256 taxAmount = (userReward * 5) / 100;
             uint256 afterTax = userReward - taxAmount;
 
@@ -538,7 +527,6 @@ contract StakingReward is Owned {
             USDT.transfer(currentUser, afterTax);
             USDT.transfer(profitAddress, taxAmount);
 
-            // 更新已分配等级
             distributedLevel = levelRate;
 
             if (distributedLevel >= 18) {
@@ -548,6 +536,7 @@ contract StakingReward is Owned {
             currentUser = _getReferral(currentUser);
             depth++;
         }
+
         if (distributedLevel < 18) {
             uint256 remainingRate = 18 - distributedLevel;
             uint256 remainingReward = (totalTeamReward * remainingRate) / 18;
@@ -605,8 +594,6 @@ contract StakingReward is Owned {
         }
         return ups;
     }
-
-    // ============ 查询函数 ============
 
     function getNewDistributionInfo(
         address user
