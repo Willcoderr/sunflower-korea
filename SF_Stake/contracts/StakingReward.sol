@@ -1,4 +1,3 @@
-[dotenv@17.2.3] injecting env (0) from .env -- tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`
 // Sources flattened with hardhat v2.27.1 https://hardhat.org
 
 // SPDX-License-Identifier: AGPL-3.0-only AND MIT AND UNLICENSED
@@ -8,7 +7,7 @@
 // Original license: SPDX_License_Identifier: MIT
 // OpenZeppelin Contracts (last updated v5.4.0) (token/ERC20/IERC20.sol)
 
-pragma solidity >=0.4.16;
+pragma solidity >=0.8.20 <0.8.25;
 
 /**
  * @dev Interface of the ERC-20 standard as defined in the ERC.

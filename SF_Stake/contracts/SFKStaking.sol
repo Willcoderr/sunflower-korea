@@ -1,4 +1,5 @@
-[dotenv@17.2.3] injecting env (0) from .env -- tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild
+
+
 // Sources flattened with hardhat v2.27.1 https://hardhat.org
 
 // SPDX-License-Identifier: AGPL-3.0-only AND MIT AND UNLICENSED
@@ -469,6 +470,8 @@ interface ISFExchange {
     event WhitelistDeposit(address indexed from, uint256 sfAmount, uint256 usdtAmount);
     event StakingContractUpdated(address indexed oldContract, address indexed newContract);
     event ReserveThresholdUpdated(uint256 minSFReserve, uint256 minUSDTReserve);
+    event SfSwapAddressUpdated(address indexed oldAddress, address indexed newAddress);
+    event UsdtSwapAddressUpdated(address indexed oldAddress, address indexed newAddress);
     
     // ============ Core Functions ============
     
@@ -551,14 +554,18 @@ interface ISFExchange {
     
     /**
      * @dev 获取配置参数
-     * @return minSFReserve 最小 SF 储备
-     * @return minUSDTReserve 最小 USDT 储备
-     * @return stakingContract 授权的质押合约地址
+     * @return _minSFReserve 最小 SF 储备
+     * @return _minUSDTReserve 最小 USDT 储备
+     * @return _stakingContract 质押合约地址
+     * @return _sfSwapAddress SF 交换地址
+     * @return _usdtSwapAddress USDT 交换地址
      */
     function getConfig() external view returns (
-        uint256 minSFReserve,
-        uint256 minUSDTReserve,
-        address stakingContract
+        uint256 _minSFReserve,
+        uint256 _minUSDTReserve,
+        address _stakingContract,
+        address _sfSwapAddress,
+        address _usdtSwapAddress
     );
 }
 
@@ -649,20 +656,6 @@ interface IStakingReward {
 }
 
 
-// File contracts/interface/IUniswapV2FactoryLike.sol
-
-// Original license: SPDX_License_Identifier: UNLICENSED
-pragma solidity >=0.8.20 <0.8.25;
-
-/**
- * @title IStaking Interface
- * @dev Staking 合约接口，用于 StakingReward 合约调用 Staking 合约的函数
- */
-interface IUniswapV2FactoryLike {
-    function getPair(address tokenA, address tokenB) external view returns (address pair);
-}
-
-
 // File solmate/src/auth/Owned.sol
 
 // Original license: SPDX_License_Identifier: AGPL-3.0-only
@@ -719,7 +712,6 @@ abstract contract Owned {
 
 // Original license: SPDX_License_Identifier: UNLICENSED
 pragma solidity >=0.8.20 <0.8.25;
-
 
 
 
@@ -1077,7 +1069,7 @@ contract Staking is Referral,Owned,ReentrancyGuard {
         
         // 获取底池USDT储备
         uint256 reverseu = SFK.getReserveUSDT();
-        uint256 sfReserve = getSFSFK_SFReserve(); // 获取池子里边有多少SF
+        uint256 sfReserve = SFK.getReserveSF(); // 获取池子里边有多少SF
         uint256 usdtOut = quoteSFInUSDT(sfReserve); // SF转换成USDT
         reverseu = reverseu + usdtOut ;
         
@@ -1116,21 +1108,6 @@ contract Staking is Referral,Owned,ReentrancyGuard {
          uint256[] memory amountsOut = ROUTER.getAmountsOut(sfAmount, path);
          return amountsOut[2];
     }
-
-   /// @notice 获取 SF/SFK 池中 SF 的储备量（只读，不swap）
-   function getSFSFK_SFReserve() public view returns (uint256 sfReserve) {
-       address factory = ROUTER.factory();
-       address pair = IUniswapV2FactoryLike(factory).getPair(address(SF), address(SFK));
-       require(pair != address(0), "SF/SFK pair not exist");
-
-       (uint112 r0, uint112 r1, ) = IUniswapV2Pair(pair).getReserves();
-        address token0 = IUniswapV2Pair(pair).token0();
-
-       // token0 是 SF 就取 r0，否则取 r1
-       sfReserve = (token0 == address(SF)) ? uint256(r0) : uint256(r1);
-       return sfReserve;
-   }
-
 
     //uint8 最大 255，用户记录最多200条，所以使用uint256不会越界
     function rewardOfSlot(address user, uint256 index) public view returns (uint256 reward){
@@ -1767,6 +1744,64 @@ contract Staking is Referral,Owned,ReentrancyGuard {
         emit RewardOnly(msg.sender, reward - amount, uint40(block.timestamp), index);
     }
 
+    // 取消单独提取收益，只能在unstake中提取收益
+    // // 提取收益逻辑 (逻辑不正确需要修改成 从SFK/USDT和SF/SFK池共同拿出一半的金额)
+    // function rewardOnly(uint256 index) external onlyEOA nonReentrant returns (uint256) {
+    //     Vars memory v;
+    //     (v.reward, v.stake) = calReward(index);
+    //     uint256 dvv = (v.reward - v.stake) * 30 / 100; 
+
+    //     v.sfBefore   = SFK.balanceOf(address(this));
+    //     v.usdtBefore  = USDT.balanceOf(address(this));
+
+    //     // 计算期望得到的 USDT 数量（v.reward 和 v.stake 是 SFK 数量，需要转换成 USDT）
+    //     // v.reward - v.stake + dvv 是收益部分（SFK 数量）
+    //     uint256 expectedUsdt = getUsdtAmountsOut(v.reward - v.stake + dvv);
+        
+    //     // 计算需要多少 SF 才能得到期望的 USDT 数量
+    //     address[] memory pathSF = new address[](2);
+    //     pathSF[0] = address(SF);
+    //     pathSF[1] = address(USDT);
+    //     uint256[] memory amountsIn = ROUTER.getAmountsIn(expectedUsdt, pathSF);
+    //     uint256 requiredSF = amountsIn[0];
+        
+    //     // 检查合约是否有足够的 SF
+    //     require(v.sfBefore >= requiredSF, "Insufficient SF balance");
+        
+    //     uint256 maxSFInput = v.sfBefore > requiredSF * 110 / 100 
+    //         ? requiredSF * 110 / 100  // 如果余额充足，使用 requiredSF + 10% 滑点
+    //         : v.sfBefore;  // 如果余额有限，使用全部余额
+        
+    //     ROUTER.swapTokensForExactTokens(
+    //         expectedUsdt,  // amountOut: 期望得到的 USDT 数量
+    //         maxSFInput,    // amountInMax: 最多支付的 SF 数量
+    //         pathSF,
+    //         address(this),
+    //         block.timestamp + 300
+    //     );
+
+    //     uint256 sfUsed = v.sfBefore - SF.balanceOf(address(this));
+    //     uint256 usdtGot = USDT.balanceOf(address(this)) - v.usdtBefore;
+
+    //     uint256 usdtForDev; 
+    //     uint256 usdtForUser; 
+    //     uint256 dvvUsdt = getUsdtAmountsOut(dvv);
+    //     if (usdtGot > dvvUsdt) {
+    //         usdtForDev  = dvvUsdt;
+    //         usdtForUser = usdtGot - usdtForDev;
+    //     } else {
+    //         usdtForDev  = (usdtGot * 30) / 100;
+    //         usdtForUser = usdtGot - usdtForDev;
+    //     }
+
+    //     // lastRewardTime 现在由 StakingReward 合约管理
+        
+    //     // 现在执行所有外部调用（Interactions）
+    //     // 用户得到usdtForUser（70%收益），剩余的30%保留在合约中，由上级手动领取
+    //     USDT.transfer(msg.sender, usdtForUser);
+    //     SF.recycle(sfUsed);
+    //     return v.reward - v.stake;
+    // }
 
     function sync() external {
         uint256 w_bal = IERC20(USDT).balanceOf(address(this));
