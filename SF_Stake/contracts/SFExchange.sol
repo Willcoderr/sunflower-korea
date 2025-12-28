@@ -1,13 +1,5 @@
+pragma solidity >=0.8.20 <0.8.25;
 
-
-[dotenv@17.2.3] injecting env (4) from .env -- tip: ⚙️  override existing env vars with { override: true }
-// Sources flattened with hardhat v2.27.1 https://hardhat.org
-
-// SPDX-License-Identifier: AGPL-3.0-only AND MIT AND UNLICENSED
-
-// File @uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router01.sol@v1.1.0-beta.0
-
-pragma solidity >=0.6.2;
 
 interface IUniswapV2Router01 {
     function factory() external pure returns (address);
@@ -103,11 +95,6 @@ interface IUniswapV2Router01 {
     function getAmountsIn(uint amountOut, address[] calldata path) external view returns (uint[] memory amounts);
 }
 
-
-// File @uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol@v1.1.0-beta.0
-
-pragma solidity >=0.6.2;
-
 interface IUniswapV2Router02 is IUniswapV2Router01 {
     function removeLiquidityETHSupportingFeeOnTransferTokens(
         address token,
@@ -149,149 +136,37 @@ interface IUniswapV2Router02 is IUniswapV2Router01 {
     ) external;
 }
 
-
-// File @openzeppelin/contracts/token/ERC20/IERC20.sol@v5.4.0
-
-// Original license: SPDX_License_Identifier: MIT
-// OpenZeppelin Contracts (last updated v5.4.0) (token/ERC20/IERC20.sol)
-
-pragma solidity >=0.4.16;
-
-/**
- * @dev Interface of the ERC-20 standard as defined in the ERC.
- */
 interface IERC20 {
-    /**
-     * @dev Emitted when `value` tokens are moved from one account (`from`) to
-     * another (`to`).
-     *
-     * Note that `value` may be zero.
-     */
     event Transfer(address indexed from, address indexed to, uint256 value);
 
-    /**
-     * @dev Emitted when the allowance of a `spender` for an `owner` is set by
-     * a call to {approve}. `value` is the new allowance.
-     */
     event Approval(address indexed owner, address indexed spender, uint256 value);
 
-    /**
-     * @dev Returns the value of tokens in existence.
-     */
     function totalSupply() external view returns (uint256);
 
-    /**
-     * @dev Returns the value of tokens owned by `account`.
-     */
     function balanceOf(address account) external view returns (uint256);
 
-    /**
-     * @dev Moves a `value` amount of tokens from the caller's account to `to`.
-     *
-     * Returns a boolean value indicating whether the operation succeeded.
-     *
-     * Emits a {Transfer} event.
-     */
     function transfer(address to, uint256 value) external returns (bool);
 
-    /**
-     * @dev Returns the remaining number of tokens that `spender` will be
-     * allowed to spend on behalf of `owner` through {transferFrom}. This is
-     * zero by default.
-     *
-     * This value changes when {approve} or {transferFrom} are called.
-     */
     function allowance(address owner, address spender) external view returns (uint256);
 
-    /**
-     * @dev Sets a `value` amount of tokens as the allowance of `spender` over the
-     * caller's tokens.
-     *
-     * Returns a boolean value indicating whether the operation succeeded.
-     *
-     * IMPORTANT: Beware that changing an allowance with this method brings the risk
-     * that someone may use both the old and the new allowance by unfortunate
-     * transaction ordering. One possible solution to mitigate this race
-     * condition is to first reduce the spender's allowance to 0 and set the
-     * desired value afterwards:
-     * https://github.com/ethereum/EIPs/issues/20#issuecomment-263524729
-     *
-     * Emits an {Approval} event.
-     */
     function approve(address spender, uint256 value) external returns (bool);
 
-    /**
-     * @dev Moves a `value` amount of tokens from `from` to `to` using the
-     * allowance mechanism. `value` is then deducted from the caller's
-     * allowance.
-     *
-     * Returns a boolean value indicating whether the operation succeeded.
-     *
-     * Emits a {Transfer} event.
-     */
     function transferFrom(address from, address to, uint256 value) external returns (bool);
 }
 
-
-// File @openzeppelin/contracts/utils/ReentrancyGuard.sol@v5.4.0
-
-// Original license: SPDX_License_Identifier: MIT
-// OpenZeppelin Contracts (last updated v5.1.0) (utils/ReentrancyGuard.sol)
-
-pragma solidity ^0.8.20;
-
-/**
- * @dev Contract module that helps prevent reentrant calls to a function.
- *
- * Inheriting from `ReentrancyGuard` will make the {nonReentrant} modifier
- * available, which can be applied to functions to make sure there are no nested
- * (reentrant) calls to them.
- *
- * Note that because there is a single `nonReentrant` guard, functions marked as
- * `nonReentrant` may not call one another. This can be worked around by making
- * those functions `private`, and then adding `external` `nonReentrant` entry
- * points to them.
- *
- * TIP: If EIP-1153 (transient storage) is available on the chain you're deploying at,
- * consider using {ReentrancyGuardTransient} instead.
- *
- * TIP: If you would like to learn more about reentrancy and alternative ways
- * to protect against it, check out our blog post
- * https://blog.openzeppelin.com/reentrancy-after-istanbul/[Reentrancy After Istanbul].
- */
 abstract contract ReentrancyGuard {
-    // Booleans are more expensive than uint256 or any type that takes up a full
-    // word because each write operation emits an extra SLOAD to first read the
-    // slot's contents, replace the bits taken up by the boolean, and then write
-    // back. This is the compiler's defense against contract upgrades and
-    // pointer aliasing, and it cannot be disabled.
 
-    // The values being non-zero value makes deployment a bit more expensive,
-    // but in exchange the refund on every call to nonReentrant will be lower in
-    // amount. Since refunds are capped to a percentage of the total
-    // transaction's gas, it is best to keep them low in cases like this one, to
-    // increase the likelihood of the full refund coming into effect.
     uint256 private constant NOT_ENTERED = 1;
     uint256 private constant ENTERED = 2;
 
     uint256 private _status;
 
-    /**
-     * @dev Unauthorized reentrant call.
-     */
     error ReentrancyGuardReentrantCall();
 
     constructor() {
         _status = NOT_ENTERED;
     }
 
-    /**
-     * @dev Prevents a contract from calling itself, directly or indirectly.
-     * Calling a `nonReentrant` function from another `nonReentrant`
-     * function is not supported. It is possible to prevent this from happening
-     * by making the `nonReentrant` function external, and making it call a
-     * `private` function that does the actual work.
-     */
     modifier nonReentrant() {
         _nonReentrantBefore();
         _;
@@ -299,47 +174,27 @@ abstract contract ReentrancyGuard {
     }
 
     function _nonReentrantBefore() private {
-        // On the first call to nonReentrant, _status will be NOT_ENTERED
         if (_status == ENTERED) {
             revert ReentrancyGuardReentrantCall();
         }
 
-        // Any calls to nonReentrant after this point will fail
         _status = ENTERED;
     }
 
     function _nonReentrantAfter() private {
-        // By storing the original value once again, a refund is triggered (see
-        // https://eips.ethereum.org/EIPS/eip-2200)
         _status = NOT_ENTERED;
     }
 
-    /**
-     * @dev Returns true if the reentrancy guard is currently set to "entered", which indicates there is a
-     * `nonReentrant` function in the call stack.
-     */
     function _reentrancyGuardEntered() internal view returns (bool) {
         return _status == ENTERED;
     }
 }
 
-
-// File contracts/Const.sol
-
-// Original license: SPDX_License_Identifier: UNLICENSED
-pragma solidity ^0.8.20;
-
-address constant _USDT = 0xC6961C826cAdAC9b85F444416D3bf0Ca2a1c38CA; // MUSDT
-address constant _SF = 0x9af8d66Fc14beC856896771fD7D2DB12b41ED9E8; // SF Token
-address constant _SFK = 0xb362f8372cE0EF2265E9988292d17abfEB96473f; // SFK Token
-address constant _ROUTER = 0xD99D1c33F9fC3444f8101754aBC46c52416550D1; // PancakeSwap Router
-address constant FUND_ADDRESS = 0xf3A51876c0Fb4FA7F99A62E3D6CF7d0574Aeb60d; // Fund Address (测试用 Owner 地址)
-
-
-// File contracts/interface/ISF.sol
-
-// Original license: SPDX_License_Identifier: UNLICENSED
-pragma solidity ^0.8.20;
+address constant _USDT = 0xC6961C826cAdAC9b85F444416D3bf0Ca2a1c38CA;
+address constant _SF = 0x9af8d66Fc14beC856896771fD7D2DB12b41ED9E8;
+address constant _SFK = 0xb362f8372cE0EF2265E9988292d17abfEB96473f;
+address constant _ROUTER = 0xD99D1c33F9fC3444f8101754aBC46c52416550D1;
+address constant FUND_ADDRESS = 0xf3A51876c0Fb4FA7F99A62E3D6CF7d0574Aeb60d;
 
 interface ISFErc20 {
     event ExcludedFromFee(address account);
@@ -355,7 +210,6 @@ interface ISFErc20 {
     function excludeFromDividend(address account) external;
     function excludeFromFee(address account) external;
     function excludeMultipleAccountsFromFee(address[] memory accounts) external;
-    // function getInviter(address user) external view returns (address);
     function inSwapAndLiquify() external view returns (bool);
     function includeInFee(address account) external;
     function isDividendExempt(address) external view returns (bool);
@@ -381,8 +235,6 @@ interface ISFErc20 {
     function transferOwnership(address newOwner) external;
     function uniswapV2Pair() external view returns (address);
     function recycle(uint256 amount) external;
-    // function setInvite(address user, address parent) external;
-    // function inviter(address user) external view returns (address parent);
     function getReserveU() external view returns (uint112);
 
     function totalSupply() external view returns (uint256);
@@ -390,20 +242,8 @@ interface ISFErc20 {
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
 }
 
-
-// File contracts/interface/ISFExchange.sol
-
-// Original license: SPDX_License_Identifier: UNLICENSED
-pragma solidity >=0.8.20 <0.8.25;
-
-/**
- * @title ISFExchange Interface
- * @notice SF 兑换合约接口（中间合约）
- * @dev 用于质押合约与 SF 兑换合约的交互
- */
 interface ISFExchange {
-    // ============ Events ============
-    
+
     event ExchangeUSDTForSF(address indexed user, uint256 usdtAmount, uint256 sfAmount);
     event ExchangeSFForUSDT(address indexed user, uint256 sfAmount, uint256 usdtAmount);
     event WhitelistDeposit(address indexed from, uint256 sfAmount, uint256 usdtAmount);
@@ -428,24 +268,12 @@ interface ISFExchange {
     );
 }
 
-
-// File solmate/src/auth/Owned.sol
-
-// Original license: SPDX_License_Identifier: AGPL-3.0-only
-pragma solidity >=0.8.0;
-
-/// @notice Simple single owner authorization mixin.
-/// @author Solmate (https://github.com/transmissions11/solmate/blob/main/src/auth/Owned.sol)
 abstract contract Owned {
-    /*//////////////////////////////////////////////////////////////
                                  EVENTS
-    //////////////////////////////////////////////////////////////*/
 
     event OwnershipTransferred(address indexed user, address indexed newOwner);
 
-    /*//////////////////////////////////////////////////////////////
                             OWNERSHIP STORAGE
-    //////////////////////////////////////////////////////////////*/
 
     address public owner;
 
@@ -455,9 +283,7 @@ abstract contract Owned {
         _;
     }
 
-    /*//////////////////////////////////////////////////////////////
                                CONSTRUCTOR
-    //////////////////////////////////////////////////////////////*/
 
     constructor(address _owner) {
         owner = _owner;
@@ -465,9 +291,7 @@ abstract contract Owned {
         emit OwnershipTransferred(address(0), _owner);
     }
 
-    /*//////////////////////////////////////////////////////////////
                              OWNERSHIP LOGIC
-    //////////////////////////////////////////////////////////////*/
 
     function transferOwnership(address newOwner) public virtual onlyOwner {
         owner = newOwner;
@@ -476,89 +300,63 @@ abstract contract Owned {
     }
 }
 
-
-// File contracts/SFExchange.sol
-
-// Original license: SPDX_License_Identifier: UNLICENSED
-pragma solidity >=0.8.20 <0.8.25;
-
-
-
-
-
-
-
 contract SFExchange is ISFExchange, Owned, ReentrancyGuard {
     ISFErc20 public SF = ISFErc20(_SF);
     IERC20 public USDT = IERC20(_USDT);
     IERC20 public SFK = IERC20(_SFK);
     IUniswapV2Router02 public immutable ROUTER = IUniswapV2Router02(_ROUTER);
 
-    address public stakingContract;  // 只允许质押合约调用
-    address public sfSwapAddress;    // SF白名单地址（用于接收USDT并购买SF）
-    address public usdtSwapAddress;  // USDT补充地址 (用于接收SF并购买USDT）
-    
-    uint256 public minSFReserve = 10e18;  // 最小 SF 储备
-    uint256 public minUSDTReserve = 500e18; // 最小 USDT 储备
-    
+    address public stakingContract;
+    address public sfSwapAddress;
+    address public usdtSwapAddress;
+
+    uint256 public minSFReserve = 10e18;
+    uint256 public minUSDTReserve = 500e18;
+
     constructor() Owned(msg.sender) {
-        // 验证 SF 合约配置正确
         address pairAddress = SF.uniswapV2Pair();
         require(pairAddress != address(0), "SF pair not configured");
     }
-    
+
     modifier onlyStaking() {
         require(msg.sender == stakingContract, "Only staking");
         _;
     }
-    
+
     function exchangeUSDTForSF(uint256 usdtAmount) external override onlyStaking nonReentrant returns (uint256 sfAmount) {
         require(usdtAmount > 0, "Amount must be greater than 0");
 
-        // 1. 接收 USDT
         USDT.transferFrom(msg.sender, address(this), usdtAmount);
-        
-        // 2. 基于当前价格计算 SF 数量（参考 SF/USDT 池）
+
         sfAmount = calculateSFAmount(usdtAmount);
-        
-        // 3. 检查 SF 储备是否充足
+
         require(SF.balanceOf(address(this)) >= sfAmount + minSFReserve, "Insufficient SF reserve");
 
-        // 4. 转出 SF
         SF.transfer(msg.sender, sfAmount);
 
-        // 5. 将 USDT 转给 sfSwapAddress（用于购买SF补充储备）
         require(sfSwapAddress != address(0), "sfSwapAddress not set");
         USDT.transfer(sfSwapAddress, usdtAmount);
 
         emit ExchangeUSDTForSF(msg.sender, usdtAmount, sfAmount);
     }
-    
+
     function exchangeSFForUSDT(uint256 sfAmount) external override onlyStaking nonReentrant returns (uint256 usdtAmount) {
         require(sfAmount > 0, "Amount must be greater than 0");
 
-        // 1. 接收 SF
         SF.transferFrom(msg.sender, address(this), sfAmount);
 
-        // 2. 基于当前价格计算 USDT 数量
         usdtAmount = calculateUSDTAmount(sfAmount);
-        
-        // 3. 检查 USDT 储备是否充足
+
         require(USDT.balanceOf(address(this)) >= usdtAmount + minUSDTReserve, "Insufficient USDT reserve");
 
-       // 4. 转出 USDT
         USDT.transfer(msg.sender, usdtAmount);
 
-        // 5. 将 SF 转给 usdtSwapAddress（用于购买USDT补充储备）
         require(usdtSwapAddress != address(0), "usdtSwapAddress not set");
         SF.transfer(usdtSwapAddress, sfAmount);
 
         emit ExchangeSFForUSDT(msg.sender, sfAmount, usdtAmount);
     }
-    
-    /**
-     * @dev 白名单充值（链下购买后转入）
-     */
+
     function depositFromWhitelist(uint256 sfAmount, uint256 usdtAmount) external override onlyOwner nonReentrant {
         require(sfAmount > 0 || usdtAmount > 0, "At least one amount must be greater than 0");
         if (sfAmount > 0) {
@@ -569,7 +367,6 @@ contract SFExchange is ISFExchange, Owned, ReentrancyGuard {
         }
         emit WhitelistDeposit(msg.sender, sfAmount, usdtAmount);
     }
-
 
     function setSfSwapAddress(address _sfSwapAddress) external onlyOwner {
         require(_sfSwapAddress != address(0), "Invalid address");
@@ -591,7 +388,7 @@ contract SFExchange is ISFExchange, Owned, ReentrancyGuard {
         stakingContract = _stakingContract;
         emit StakingContractUpdated(oldContract, _stakingContract);
     }
-    
+
     function setReserveThresholds(uint256 _minSFReserve, uint256 _minUSDTReserve) external override onlyOwner {
         require(_minSFReserve <= type(uint256).max / 2, "minSFReserve too large");
         require(_minUSDTReserve <= type(uint256).max / 2, "minUSDTReserve too large");
@@ -606,30 +403,29 @@ contract SFExchange is ISFExchange, Owned, ReentrancyGuard {
         require(IERC20(token).balanceOf(address(this)) >= amount, "Insufficient contract balance");
         IERC20(token).transfer(to, amount);
     }
-    
 
     function calculateSFAmount(uint256 usdtAmount) public view override returns (uint256) {
         require(usdtAmount > 0, "Amount must be greater than 0");
-        
+
         address[] memory path = new address[](2);
         path[0] = address(USDT);
         path[1] = address(SF);
-        
+
         uint256[] memory amountsOut = ROUTER.getAmountsOut(usdtAmount, path);
         return amountsOut[1];
     }
-    
+
     function calculateUSDTAmount(uint256 sfAmount) public view override returns (uint256) {
         require(sfAmount > 0, "Amount must be greater than 0");
-        
+
         address[] memory path = new address[](2);
         path[0] = address(SF);
         path[1] = address(USDT);
-        
+
         uint256[] memory amountsOut = ROUTER.getAmountsOut(sfAmount, path);
         return amountsOut[1];
     }
-    
+
     function getReserveStatus() external view override returns (
         uint256 sfBalance,
         uint256 usdtBalance,
@@ -641,7 +437,7 @@ contract SFExchange is ISFExchange, Owned, ReentrancyGuard {
         sfSufficient = sfBalance >= minSFReserve;
         usdtSufficient = usdtBalance >= minUSDTReserve;
     }
-    
+
     function getConfig() external view returns (
         uint256 _minSFReserve,
         uint256 _minUSDTReserve,
