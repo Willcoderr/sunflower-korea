@@ -1,5 +1,7 @@
 pragma solidity >=0.8.20 <0.8.25;
 
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 🔐 prevent committing .env to code: https:
+
 interface IERC5267 {
     event EIP712DomainChanged();
 
@@ -1665,33 +1667,21 @@ interface IStaking {
 }
 
 abstract contract Owned {
-                                 EVENTS
-
     event OwnershipTransferred(address indexed user, address indexed newOwner);
 
-                            OWNERSHIP STORAGE
-
     address public owner;
-
     modifier onlyOwner() virtual {
         require(msg.sender == owner, "UNAUTHORIZED");
-
         _;
     }
 
-                               CONSTRUCTOR
-
     constructor(address _owner) {
         owner = _owner;
-
         emit OwnershipTransferred(address(0), _owner);
     }
 
-                             OWNERSHIP LOGIC
-
     function transferOwnership(address newOwner) public virtual onlyOwner {
         owner = newOwner;
-
         emit OwnershipTransferred(msg.sender, newOwner);
     }
 }
@@ -1713,6 +1703,7 @@ contract StakingReward is Owned, ReentrancyGuard, EIP712 {
     address public authorizedSigner;
     mapping(bytes32  => bool) public settled;
     bool public paused;
+    mapping(bytes32  => uint256) public profitU;
 
     bytes32 private constant PAYOUT_TYPEHASH = keccak256("Payout(address recipient,uint256 amount)");
 
@@ -1821,6 +1812,9 @@ contract StakingReward is Owned, ReentrancyGuard, EIP712 {
             deadline
         ));
    }
+   function setSettlementProfitUsdt(bytes32 settlementId, uint256 profitUsdt) external onlyStaking{
+      profitU[settlementId] = profitUsdt;
+   }
 
     function distribute(  bytes32 settlementId,  Payout[] calldata payouts,  uint256 total,  uint256 deadline, bytes calldata signature) external nonReentrant {
         require(!paused, "paused");
@@ -1836,6 +1830,7 @@ contract StakingReward is Owned, ReentrancyGuard, EIP712 {
         }
         require(sum == total, "bad total");        
         require(USDT.balanceOf(address(this)) >= total, "insufficient USDT");
+        require(profitU[settlementId] >= total, "insufficient profitUsdt");
 
         bytes32 structHash = _hashSettlement(
             settlementId,
@@ -1850,6 +1845,7 @@ contract StakingReward is Owned, ReentrancyGuard, EIP712 {
         require(recovered == authorizedSigner, "bad sig");
 
         settled[settlementId] = true;
+        delete profitU[settlementId];
 
         for (uint256 i = 0; i < payouts.length; i++) {
             USDT.transfer(payouts[i].recipient, payouts[i].amount);

@@ -207,6 +207,27 @@ abstract contract BaseDEX {
     }
 }
 
+abstract contract Owned {
+    address public owner;
+
+    modifier onlyOwner() virtual {
+        require(msg.sender == owner, "UNAUTHORIZED");
+        _;
+    }
+
+    constructor(address _owner) {
+        owner = _owner;
+        emit OwnershipTransferred(address(0), _owner);
+    }
+
+    event OwnershipTransferred(address indexed user, address indexed newOwner);
+
+    function transferOwnership(address newOwner) public virtual onlyOwner {
+        owner = newOwner;
+        emit OwnershipTransferred(msg.sender, newOwner);
+    }
+}
+
 abstract contract ExcludedFromFeeList is Owned {
     mapping(address => bool) internal _isExcludedFromFee;
 
@@ -247,8 +268,79 @@ abstract contract FirstLaunch {
     }
 }
 
-abstract contract Owned {
+interface IUniswapV2Pair {
+    event Approval(address indexed owner, address indexed spender, uint value);
+    event Transfer(address indexed from, address indexed to, uint value);
+
+    function name() external pure returns (string memory);
+    function symbol() external pure returns (string memory);
+    function decimals() external pure returns (uint8);
+    function totalSupply() external view returns (uint);
+    function balanceOf(address owner) external view returns (uint);
+    function allowance(address owner, address spender) external view returns (uint);
+
+    function approve(address spender, uint value) external returns (bool);
+    function transfer(address to, uint value) external returns (bool);
+    function transferFrom(address from, address to, uint value) external returns (bool);
+
+    function DOMAIN_SEPARATOR() external view returns (bytes32);
+    function PERMIT_TYPEHASH() external pure returns (bytes32);
+    function nonces(address owner) external view returns (uint);
+
+    function permit(address owner, address spender, uint value, uint deadline, uint8 v, bytes32 r, bytes32 s) external;
+
+    event Mint(address indexed sender, uint amount0, uint amount1);
+    event Burn(address indexed sender, uint amount0, uint amount1, address indexed to);
+    event Swap(
+        address indexed sender,
+        uint amount0In,
+        uint amount1In,
+        uint amount0Out,
+        uint amount1Out,
+        address indexed to
+    );
+    event Sync(uint112 reserve0, uint112 reserve1);
+
+    function MINIMUM_LIQUIDITY() external pure returns (uint);
+    function factory() external view returns (address);
+    function token0() external view returns (address);
+    function token1() external view returns (address);
+    function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast);
+    function price0CumulativeLast() external view returns (uint);
+    function price1CumulativeLast() external view returns (uint);
+    function kLast() external view returns (uint);
+
+    function mint(address to) external returns (uint liquidity);
+    function burn(address to) external returns (uint amount0, uint amount1);
+    function swap(uint amount0Out, uint amount1Out, address to, bytes calldata data) external;
+    function skim(address to) external;
+    function sync() external;
+
+    function initialize(address, address) external;
+}
+
+interface IReferral{
     
+    event BindReferral(address indexed user,address parent);
+    
+    function getReferral(address _address)external view returns(address);
+
+    function isBindReferral(address _address) external view returns(bool);
+
+    function getReferralCount(address _address) external view returns(uint256);
+
+    function bindReferral(address _referral,address _user) external;
+
+    function getReferrals(address _address,uint256 _num) external view returns(address[] memory);
+
+    function getRootAddress()external view returns(address);
+}
+
+interface IStaking {
+    function balances(address) external view returns (uint256);
+    function isPreacher(address) external  view returns(bool);
+}
+
 interface ITWAPOracle {
     
     function getDailyClosePrice() external view returns (uint256 price);

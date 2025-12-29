@@ -1,5 +1,4 @@
 pragma solidity >=0.8.20 <0.8.25;
-
 interface IUniswapV2Router01 {
     function factory() external pure returns (address);
     function WETH() external pure returns (address);
@@ -372,29 +371,19 @@ interface IStakingReward {
 }
 
 abstract contract Owned {
-                                 EVENTS
 
     event OwnershipTransferred(address indexed user, address indexed newOwner);
 
-                            OWNERSHIP STORAGE
-
     address public owner;
-
     modifier onlyOwner() virtual {
         require(msg.sender == owner, "UNAUTHORIZED");
-
         _;
     }
-
-                               CONSTRUCTOR
-
     constructor(address _owner) {
         owner = _owner;
 
         emit OwnershipTransferred(address(0), _owner);
     }
-
-                             OWNERSHIP LOGIC
 
     function transferOwnership(address newOwner) public virtual onlyOwner {
         owner = newOwner;
@@ -1408,7 +1397,7 @@ contract Staking is Referral, Owned, ReentrancyGuard {
 
         v.totalUsdtForUser = v.usdtFromPool1 + v.usdtFromExchange;
 
-        v.principalUsdt = getUsdtAmountsOut(v.stake);
+        v.principalUsdt = v.stake;
 
         v.profitUsdt = 0;
         if (v.totalUsdtForUser > v.principalUsdt) {
