@@ -1,6 +1,5 @@
 pragma solidity ^0.8.20;
 
-
 interface IUniswapV2Router01 {
     function factory() external pure returns (address);
     function WETH() external pure returns (address);
@@ -205,6 +204,46 @@ abstract contract BaseDEX {
         uniswapV2PairSF = IUniswapV2Factory(uniswapV2Router.factory())
             .createPair(address(this), _SF);
         distributor = new Distributor();
+    }
+}
+
+abstract contract ExcludedFromFeeList is Owned {
+    mapping(address => bool) internal _isExcludedFromFee;
+
+    event ExcludedFromFee(address account);
+    event IncludedToFee(address account);
+
+    function isExcludedFromFee(address account) public view returns (bool) {
+        return _isExcludedFromFee[account];
+    }
+
+    function excludeFromFee(address account) public onlyOwner {
+        _isExcludedFromFee[account] = true;
+        emit ExcludedFromFee(account);
+    }
+
+    function includeInFee(address account) public onlyOwner {
+        _isExcludedFromFee[account] = false;
+        emit IncludedToFee(account);
+    }
+
+    function excludeMultipleAccountsFromFee(address[] calldata accounts) public onlyOwner {
+        uint256 len = uint256(accounts.length);
+        for (uint256 i = 0; i < len;) {
+            _isExcludedFromFee[accounts[i]] = true;
+            unchecked {
+                ++i;
+            }
+        }
+    }
+}
+
+abstract contract FirstLaunch {
+    uint40 public launchedAtTimestamp;
+
+    function launch() internal {
+        require(launchedAtTimestamp == 0, "Already launched");
+        launchedAtTimestamp = uint40(block.timestamp);
     }
 }
 
