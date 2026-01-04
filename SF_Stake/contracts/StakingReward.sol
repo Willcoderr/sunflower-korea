@@ -1,6 +1,6 @@
 pragma solidity >=0.8.20 <0.8.25;
 
-[dotenv@17.2.3] injecting env (0) from .env -- tip: 🔐 prevent committing .env to code: https:
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 🗂️ backup and recover secrets: https:
 
 interface IERC5267 {
     event EIP712DomainChanged();
@@ -1667,21 +1667,26 @@ interface IStaking {
 }
 
 abstract contract Owned {
+
     event OwnershipTransferred(address indexed user, address indexed newOwner);
 
     address public owner;
+
     modifier onlyOwner() virtual {
         require(msg.sender == owner, "UNAUTHORIZED");
+
         _;
     }
 
     constructor(address _owner) {
         owner = _owner;
+
         emit OwnershipTransferred(address(0), _owner);
     }
 
     function transferOwnership(address newOwner) public virtual onlyOwner {
         owner = newOwner;
+
         emit OwnershipTransferred(msg.sender, newOwner);
     }
 }
@@ -1702,7 +1707,7 @@ contract StakingReward is Owned, ReentrancyGuard, EIP712 {
 
     address public authorizedSigner;
     mapping(bytes32  => bool) public settled;
-    bool public paused;
+    bool public claimPaused;
     mapping(bytes32  => uint256) public profitU;
 
     bytes32 private constant PAYOUT_TYPEHASH = keccak256("Payout(address recipient,uint256 amount)");
@@ -1710,10 +1715,10 @@ contract StakingReward is Owned, ReentrancyGuard, EIP712 {
     bytes32 private constant SETTLEMENT_TYPEHASH = keccak256("Settlement(bytes32 settlementId,bytes32 payoutsHash,uint256 total,address claimer,uint256 deadline)");
 
     event SignerUpdated(address indexed oldSigner, address indexed newSigner);
-    event Paused(bool paused);
+    event ClaimedPaused(bool claimPaused);
 
-    event Distributed(
-        bytes32 indexed settlementId,
+    event ClaimedRevenue(
+        bytes32 indexed profitID,
         bytes32 indexed payoutsHash,
         uint256 total,
         address indexed claimer,
@@ -1775,9 +1780,9 @@ contract StakingReward is Owned, ReentrancyGuard, EIP712 {
         authorizedSigner = newSigner;
     }
 
-    function setPaused(bool v) external onlyOwner {
-        paused = v;
-        emit Paused(v);
+     function setClaimPaused(bool v) external onlyOwner {
+        claimPaused = v;
+        emit ClaimedPaused(v);
      }
 
     function _hashPayout(Payout calldata p) internal pure returns (bytes32) {
@@ -1816,11 +1821,11 @@ contract StakingReward is Owned, ReentrancyGuard, EIP712 {
       profitU[settlementId] = profitUsdt;
    }
 
-    function distribute(  bytes32 settlementId,  Payout[] calldata payouts,  uint256 total,  uint256 deadline, bytes calldata signature) external nonReentrant {
-        require(!paused, "paused");
+    function claim(  bytes32 profitID,  Payout[] calldata payouts,  uint256 total,  uint256 deadline, bytes calldata signature) external nonReentrant {
+        require(!claimPaused, "ClaimPaused");
         require(block.timestamp <= deadline, "expired");
-        require(!settled[settlementId], "settled");
         address claimer = msg.sender;
+        require(!settled[profitID], "settled");
 
         bytes32 payoutsHash = _hashPayoutArray(payouts);
 
@@ -1829,11 +1834,9 @@ contract StakingReward is Owned, ReentrancyGuard, EIP712 {
             sum += payouts[i].amount;
         }
         require(sum == total, "bad total");        
-        require(USDT.balanceOf(address(this)) >= total, "insufficient USDT");
-        require(profitU[settlementId] >= total, "insufficient profitUsdt");
-
+        require(USDT.balanceOf(address(this)) >= total, "insufficient USDT");    
         bytes32 structHash = _hashSettlement(
-            settlementId,
+            profitID,
             payoutsHash,
             total,
             claimer,
@@ -1844,13 +1847,12 @@ contract StakingReward is Owned, ReentrancyGuard, EIP712 {
         address recovered = ECDSA.recover(digest, signature);
         require(recovered == authorizedSigner, "bad sig");
 
-        settled[settlementId] = true;
-        delete profitU[settlementId];
+        settled[profitID] = true;
 
         for (uint256 i = 0; i < payouts.length; i++) {
             USDT.transfer(payouts[i].recipient, payouts[i].amount);
         }
-        emit Distributed(settlementId, payoutsHash, total, claimer,deadline);
+        emit ClaimedRevenue(profitID, payoutsHash, total, claimer,deadline);
    }
 
     function emitUnstakePerformanceUpdate(address user,uint256 amount) external onlyStaking {

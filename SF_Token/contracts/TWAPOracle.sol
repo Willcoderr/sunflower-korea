@@ -1,4 +1,5 @@
 pragma solidity ^0.8.20;
+
 interface IUniswapV2Pair {
     event Approval(address indexed owner, address indexed spender, uint value);
     event Transfer(address indexed from, address indexed to, uint value);
@@ -71,26 +72,7 @@ interface ITWAPOracle {
 }
 
 abstract contract Owned {
-    address public owner;
-
-    modifier onlyOwner() virtual {
-        require(msg.sender == owner, "UNAUTHORIZED");
-        _;
-    }
-
-    constructor(address _owner) {
-        owner = _owner;
-        emit OwnershipTransferred(address(0), _owner);
-    }
-
-    event OwnershipTransferred(address indexed user, address indexed newOwner);
-
-    function transferOwnership(address newOwner) public virtual onlyOwner {
-        owner = newOwner;
-        emit OwnershipTransferred(msg.sender, newOwner);
-    }
-}
-
+    
 contract TWAPOracle is ITWAPOracle, Owned {
     
     struct PairInfo {

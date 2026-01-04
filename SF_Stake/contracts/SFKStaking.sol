@@ -1,4 +1,7 @@
 pragma solidity >=0.8.20 <0.8.25;
+
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 🔑 add access controls to secrets: https:
+
 interface IUniswapV2Router01 {
     function factory() external pure returns (address);
     function WETH() external pure returns (address);
@@ -241,7 +244,7 @@ interface IUniswapV2Pair {
 
 address constant _USDT = 0xC6961C826cAdAC9b85F444416D3bf0Ca2a1c38CA;
 address constant _SF = 0x9af8d66Fc14beC856896771fD7D2DB12b41ED9E8;
-address constant _SFK = 0xb362f8372cE0EF2265E9988292d17abfEB96473f;
+address constant _SFK = 0x33DaBa07D8b1025eE4a7Af0609722797ab70FE7d;
 address constant _ROUTER = 0xD99D1c33F9fC3444f8101754aBC46c52416550D1;
 address constant FUND_ADDRESS = 0xf3A51876c0Fb4FA7F99A62E3D6CF7d0574Aeb60d;
 
@@ -375,10 +378,13 @@ abstract contract Owned {
     event OwnershipTransferred(address indexed user, address indexed newOwner);
 
     address public owner;
+
     modifier onlyOwner() virtual {
         require(msg.sender == owner, "UNAUTHORIZED");
+
         _;
     }
+
     constructor(address _owner) {
         owner = _owner;
 
@@ -549,19 +555,22 @@ contract Staking is Referral, Owned, ReentrancyGuard {
     event ProfitPending(
         address indexed user,
         bytes32 indexed settlementId,
-        uint256 principalUsdt,
+        uint256 userProfitAmount,
+        uint256 rewardAmount,
         uint256 profitUsdt,
+        uint256 principalUsdt,
         uint40 ts,
         uint256 index
     );
 
     uint256[3] rates = [
-        1000000003463000000,
-        1000000006917000000,
-        1000000014950000000
+        1002999999999999872,
+        1006000000000000000,
+        1012999999999999872
     ];
-    uint256[3] stakeDays = [1 days, 15 days, 30 days];
-    uint40 public constant timeStep = 1 days;
+
+    uint256[3] stakeDays = [1 minutes, 15 minutes, 30 minutes];
+    uint40 public constant timeStep = 1 minutes;
 
     IUniswapV2Router02 constant ROUTER = IUniswapV2Router02(_ROUTER);
     IERC20 constant USDT = IERC20(_USDT);
@@ -584,6 +593,9 @@ contract Staking is Referral, Owned, ReentrancyGuard {
     address constant profitAddress = 0xa65d295c38133f1a2FdfcA674712FdEEcc839aE9;
 
     address constant sfSwapAddress = 0x0047ebb57DB94aa193289258d48BA62f43bb8c60;
+
+    address constant addressLevelProfit =
+        0x485199875526eC576838967207af1B8624C9F1d1;
 
     address public eoaWithdrawAddress;
 
@@ -608,7 +620,6 @@ contract Staking is Referral, Owned, ReentrancyGuard {
     uint256 public mMinSwapRatioUsdt = 50;
     uint256 public mMinSwapRatioToken = 50;
     uint256 startTime = 0;
-    uint256 constant network1InTime = 90 days;
     bool bStart = false;
 
     mapping(uint256 => uint256) public tenSecondStakeAmount;
@@ -723,9 +734,6 @@ contract Staking is Referral, Owned, ReentrancyGuard {
     }
 
     function network1In() public view returns (uint256 value) {
-        if (block.timestamp > startTime + network1InTime) {
-            return 0 ether;
-        }
 
         uint256 windowStart = block.timestamp - 1 minutes;
         uint256 windowEnd = block.timestamp;
@@ -746,7 +754,7 @@ contract Staking is Referral, Owned, ReentrancyGuard {
         if (startTime == 0) return amout0;
         if (block.timestamp < startTime) return amout0;
 
-        uint256 daysElapsed = (block.timestamp - startTime) / 1 days;
+        uint256 daysElapsed = (block.timestamp - startTime) / timeStep;
 
         amout0 = 200 ether + daysElapsed * (100 ether);
 
@@ -755,36 +763,38 @@ contract Staking is Referral, Owned, ReentrancyGuard {
     }
 
     function maxStakeAmount() public view returns (uint256) {
-        uint256 lastIn = network1In();
-        uint256 canStakV = canStakeAmount();
-
-        if (lastIn > canStakV) return 0;
-
-        uint256 remaining = canStakV - lastIn;
-
         uint256 reverseu = SFK.getReserveUSDT();
         uint256 sfReserve = SFK.getReserveSF();
         uint256 usdtOut = quoteSFInUSDT(sfReserve);
         reverseu = reverseu + usdtOut;
 
-        if (canStakV >= 2000 ether) {
-            uint256 poolLimit = reverseu / 500;
+        uint256 daysElapsed = 0;
+        if (startTime > 0 && block.timestamp > startTime) {
+            daysElapsed = (block.timestamp - startTime) / timeStep;
+        }
+        uint256 lastIn = network1In();
+        uint256 canStakV = canStakeAmount();
+        uint256 maxSingleStake = 2000 ether;
+        uint256 remaining;
 
-            if (poolLimit < 2000 ether) {
-                poolLimit = 2000 ether;
+        if (daysElapsed > 18) {
+            uint256 poolLimitPerMinute = reverseu / 500;
+            uint256 effectiveLimit = poolLimitPerMinute < 2000 ether ? 2000 ether:poolLimitPerMinute;
+            if (lastIn >= effectiveLimit) {
+                return 0;
             }
+            remaining = effectiveLimit - lastIn;
 
-            if (remaining > poolLimit) {
-                remaining = poolLimit;
-            }
-        } else {
-            uint256 p1 = reverseu / 500;
-            if (remaining > p1) {
-                remaining = p1;
-            }
+            return remaining < maxSingleStake ? remaining : maxSingleStake;
         }
 
-        return remaining;
+        if (lastIn > canStakV) {
+            return 0;
+        }
+
+        remaining = canStakV - lastIn;
+
+        return remaining < maxSingleStake ? remaining : maxSingleStake;
     }
 
     function quoteSFInUSDT(
@@ -983,7 +993,7 @@ contract Staking is Referral, Owned, ReentrancyGuard {
     ) private {
         require(bStart, "ERC721: not Start");
         require(block.timestamp > startTime, "not Start!");
-        require(_amount <= maxStakeAmount(), "<1000");
+        require(_amount <= maxStakeAmount(), "<2000");
         require(_stakeIndex <= 2, "<=2");
         require(userStakeRecord[msg.sender].length < 200, "stake too long");
 
@@ -1292,9 +1302,14 @@ contract Staking is Referral, Owned, ReentrancyGuard {
         if (stake_period == 0) {
             reward = stake_amount;
         } else {
+
             uint256 rate = rates[user_record.stakeIndex];
-            uint256 factor = powu(rate, stake_period);
-            reward = (stake_amount * factor) / 1e18;
+
+           uint40 stake_period_minutes = stake_period / 60;
+
+           uint256 factor = powu(rate, stake_period_minutes);
+           reward = (stake_amount * factor) / 1e18;
+
         }
     }
 
@@ -1340,7 +1355,7 @@ contract Staking is Referral, Owned, ReentrancyGuard {
         v.usdtBefore = USDT.balanceOf(address(this));
         v.sfBefore = SF.balanceOf(address(this));
 
-        v.totalUsdtValue = getUsdtAmountsOut(v.reward);
+        v.totalUsdtValue = v.reward;
         v.halfUsdtValue = v.totalUsdtValue / 2;
 
         address[] memory pathUsdt = new address[](2);
@@ -1387,10 +1402,7 @@ contract Staking is Referral, Owned, ReentrancyGuard {
         SF.approve(address(sfExchange), type(uint256).max);
         if (v.sfFromPool2 >= requiredSF) {
             v.usdtFromExchange = sfExchange.exchangeSFForUSDT(v.sfFromPool2);
-            uint256 sfRemaining = v.sfFromPool2 - requiredSF;
-            if (sfRemaining > 0) {
-                SF.transfer(address(sfExchange), sfRemaining);
-            }
+
         } else {
             v.usdtFromExchange = sfExchange.exchangeSFForUSDT(v.sfFromPool2);
         }
@@ -1401,17 +1413,39 @@ contract Staking is Referral, Owned, ReentrancyGuard {
 
         v.profitUsdt = 0;
         if (v.totalUsdtForUser > v.principalUsdt) {
-            v.profitUsdt = v.totalUsdtForUser - v.principalUsdt;
+            v.profitUsdt = v.reward - v.principalUsdt; 
+        }
+
+        uint256 taxAmount = 0;
+        if (v.profitUsdt > 0) {
+            taxAmount = (v.profitUsdt * 5) / 100;
+            if (taxAmount > 0) {
+                USDT.transfer(profitAddress, taxAmount);
+            }
+        }
+
+        uint256 profitAfterTax = v.profitUsdt - taxAmount;
+
+        uint256 profitUserUsdt = (profitAfterTax * 70) / 100;
+        uint256 totalUserAmount = v.principalUsdt + profitUserUsdt;
+
+        uint256 levelProfitAmount = 0;
+        if (profitAfterTax > 0) {
+            levelProfitAmount = (profitAfterTax * 2) / 100;
+            if (levelProfitAmount > 0) {
+                USDT.transfer(addressLevelProfit, levelProfitAmount);
+            }
         }
 
         uint256 reservedAmount = 0;
         bytes32 settlementId = bytes32(0);
 
-        if (address(stakingReward) != address(0) && v.profitUsdt > 0) {
-            reservedAmount = v.profitUsdt;
+        if (address(stakingReward) != address(0) && profitAfterTax > 0) {
+            reservedAmount = (profitAfterTax * 28) / 100;
             if (
                 reservedAmount > 0 &&
-                v.totalUsdtForUser >= v.principalUsdt + reservedAmount
+                v.totalUsdtForUser >=
+                totalUserAmount + reservedAmount + taxAmount + levelProfitAmount
             ) {
                 settlementId = keccak256(
                     abi.encodePacked(
@@ -1424,10 +1458,6 @@ contract Staking is Referral, Owned, ReentrancyGuard {
                     )
                 );
                 USDT.transfer(address(stakingReward), reservedAmount);
-                stakingReward.setSettlementProfitUsdt(
-                    settlementId,
-                    reservedAmount
-                );
             }
         }
 
@@ -1435,7 +1465,7 @@ contract Staking is Referral, Owned, ReentrancyGuard {
             stakingReward.emitUnstakePerformanceUpdate(msg.sender, v.stake);
         }
 
-        USDT.transfer(msg.sender, v.principalUsdt);
+        USDT.transfer(msg.sender, totalUserAmount);
 
         SFK.recycleUSDT(v.actualSFK1Used);
         SFK.recycleSF(v.actualSFK2Used);
@@ -1444,8 +1474,10 @@ contract Staking is Referral, Owned, ReentrancyGuard {
             emit ProfitPending(
                 msg.sender,
                 settlementId,
-                v.principalUsdt,
+                profitUserUsdt,
+                reservedAmount,
                 v.profitUsdt,
+                v.principalUsdt,
                 uint40(block.timestamp),
                 index
             );
@@ -1480,6 +1512,10 @@ contract Staking is Referral, Owned, ReentrancyGuard {
         require(!user_record.status, "alw");
 
         amount = user_record.amount;
+
+        require(totalSupply >= amount, "totalSupply overflow");
+        require(balances[sender] >= amount, "balance overflow");
+
         totalSupply -= amount;
         balances[sender] -= amount;
         emit Transfer(sender, address(0), amount);

@@ -1,5 +1,4 @@
 pragma solidity ^0.8.20;
-
 interface IUniswapV2Router01 {
     function factory() external pure returns (address);
     function WETH() external pure returns (address);
@@ -208,139 +207,7 @@ abstract contract BaseDEX {
 }
 
 abstract contract Owned {
-    address public owner;
-
-    modifier onlyOwner() virtual {
-        require(msg.sender == owner, "UNAUTHORIZED");
-        _;
-    }
-
-    constructor(address _owner) {
-        owner = _owner;
-        emit OwnershipTransferred(address(0), _owner);
-    }
-
-    event OwnershipTransferred(address indexed user, address indexed newOwner);
-
-    function transferOwnership(address newOwner) public virtual onlyOwner {
-        owner = newOwner;
-        emit OwnershipTransferred(msg.sender, newOwner);
-    }
-}
-
-abstract contract ExcludedFromFeeList is Owned {
-    mapping(address => bool) internal _isExcludedFromFee;
-
-    event ExcludedFromFee(address account);
-    event IncludedToFee(address account);
-
-    function isExcludedFromFee(address account) public view returns (bool) {
-        return _isExcludedFromFee[account];
-    }
-
-    function excludeFromFee(address account) public onlyOwner {
-        _isExcludedFromFee[account] = true;
-        emit ExcludedFromFee(account);
-    }
-
-    function includeInFee(address account) public onlyOwner {
-        _isExcludedFromFee[account] = false;
-        emit IncludedToFee(account);
-    }
-
-    function excludeMultipleAccountsFromFee(address[] calldata accounts) public onlyOwner {
-        uint256 len = uint256(accounts.length);
-        for (uint256 i = 0; i < len;) {
-            _isExcludedFromFee[accounts[i]] = true;
-            unchecked {
-                ++i;
-            }
-        }
-    }
-}
-
-abstract contract FirstLaunch {
-    uint40 public launchedAtTimestamp;
-
-    function launch() internal {
-        require(launchedAtTimestamp == 0, "Already launched");
-        launchedAtTimestamp = uint40(block.timestamp);
-    }
-}
-
-interface IUniswapV2Pair {
-    event Approval(address indexed owner, address indexed spender, uint value);
-    event Transfer(address indexed from, address indexed to, uint value);
-
-    function name() external pure returns (string memory);
-    function symbol() external pure returns (string memory);
-    function decimals() external pure returns (uint8);
-    function totalSupply() external view returns (uint);
-    function balanceOf(address owner) external view returns (uint);
-    function allowance(address owner, address spender) external view returns (uint);
-
-    function approve(address spender, uint value) external returns (bool);
-    function transfer(address to, uint value) external returns (bool);
-    function transferFrom(address from, address to, uint value) external returns (bool);
-
-    function DOMAIN_SEPARATOR() external view returns (bytes32);
-    function PERMIT_TYPEHASH() external pure returns (bytes32);
-    function nonces(address owner) external view returns (uint);
-
-    function permit(address owner, address spender, uint value, uint deadline, uint8 v, bytes32 r, bytes32 s) external;
-
-    event Mint(address indexed sender, uint amount0, uint amount1);
-    event Burn(address indexed sender, uint amount0, uint amount1, address indexed to);
-    event Swap(
-        address indexed sender,
-        uint amount0In,
-        uint amount1In,
-        uint amount0Out,
-        uint amount1Out,
-        address indexed to
-    );
-    event Sync(uint112 reserve0, uint112 reserve1);
-
-    function MINIMUM_LIQUIDITY() external pure returns (uint);
-    function factory() external view returns (address);
-    function token0() external view returns (address);
-    function token1() external view returns (address);
-    function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast);
-    function price0CumulativeLast() external view returns (uint);
-    function price1CumulativeLast() external view returns (uint);
-    function kLast() external view returns (uint);
-
-    function mint(address to) external returns (uint liquidity);
-    function burn(address to) external returns (uint amount0, uint amount1);
-    function swap(uint amount0Out, uint amount1Out, address to, bytes calldata data) external;
-    function skim(address to) external;
-    function sync() external;
-
-    function initialize(address, address) external;
-}
-
-interface IReferral{
     
-    event BindReferral(address indexed user,address parent);
-    
-    function getReferral(address _address)external view returns(address);
-
-    function isBindReferral(address _address) external view returns(bool);
-
-    function getReferralCount(address _address) external view returns(uint256);
-
-    function bindReferral(address _referral,address _user) external;
-
-    function getReferrals(address _address,uint256 _num) external view returns(address[] memory);
-
-    function getRootAddress()external view returns(address);
-}
-
-interface IStaking {
-    function balances(address) external view returns (uint256);
-    function isPreacher(address) external  view returns(bool);
-}
-
 interface ITWAPOracle {
     
     function getDailyClosePrice() external view returns (uint256 price);
@@ -509,7 +376,11 @@ abstract contract ERC20 is Owned, IERC20 {
         uint256 _amount
     ) internal virtual {
         require(_from != address(0), "transfer from the zero address");
-        require(_balances[_from] >= _amount, "ERC20: transfer amount exceeds balance");
+        require(_to != address(0), "ERC20: transfer to the zero address"); 
+        require(
+            _balances[_from] >= _amount,
+            "ERC20: transfer amount exceeds balance"
+        );
         _balances[_from] = _balances[_from] - _amount;
         _balances[_to] = _balances[_to] + _amount;
         emit Transfer(_from, _to, _amount);
@@ -521,13 +392,15 @@ abstract contract ERC20 is Owned, IERC20 {
         _allowances[owner][spender] = amount;
         emit Approval(owner, spender, amount);
     }
-      function getDailyClosePrice() external view returns (uint256) {
+
+    function getDailyClosePrice() external view returns (uint256) {
         return twapOracle.getDailyClosePrice();
     }
 
     function getCurrentPrice() external view returns (uint256) {
         return twapOracle.getCurrentPrice();
     }
+
     function getPriceChangeBps() external view returns (int256) {
         return twapOracle.getPriceChangeBps();
     }
@@ -549,6 +422,8 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
 
     uint256 public totalAmountLPFeeSF;
 
+    bool public reservesInitialized;
+
     
     
     
@@ -559,7 +434,7 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
     address public techAddress = 0x8D7418dD38423a07AE641c7b4CBf41dD195D7c7D;
     
     address public NFTNodeAddress = 0x86EA2cA99A9b6ea3FBbc148a25e6076e82Ab9341;
-    
+
     
     uint256 public swapAtAmount = 20 ether;
 
@@ -570,7 +445,7 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
     address public STAKING;
     
     
-    
+
     uint256 MAX_BURN_AMOUNT = 8900000 ether; 
 
     bool public inSwapAndLiquify;
@@ -588,9 +463,11 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
 
     
     POOLUStatus public poolStatusUSDT; 
-    POOLUStatus public poolStatusSF;   
+    POOLUStatus public poolStatusSF; 
 
-    constructor(address twapOracleAddress) ERC20("SFK", "SFK", 18, 11000000 ether, twapOracleAddress) {
+    constructor(
+        address twapOracleAddress
+    ) ERC20("SFK", "SFK", 18, 11000000 ether, twapOracleAddress) {
         _approve(address(this), address(uniswapV2Router), type(uint256).max);
         IERC20(_USDT).approve(address(uniswapV2Router), type(uint256).max);
         IERC20(_SF).approve(address(uniswapV2Router), type(uint256).max);
@@ -604,6 +481,9 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
     }
 
     function updatePoolReserveUSDT() public {
+        if (!reservesInitialized) {
+            require(msg.sender == owner, "Only owner before initialization");
+        }
         if (block.timestamp >= poolStatusUSDT.timestamp + 1 hours) {
             poolStatusUSDT.timestamp = uint40(block.timestamp);
             (uint112 reserveU, ) = getMyReserves(uniswapV2PairUSDT);
@@ -611,7 +491,8 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
         }
     }
 
-    function updatePoolReserveUSDT(uint112 reserveU) private {   
+    function updatePoolReserveUSDT(uint112 reserveU) private {
+        require(reservesInitialized, "reserves not initialized");
         if (block.timestamp >= poolStatusUSDT.timestamp + 1 hours) {
             poolStatusUSDT.timestamp = uint40(block.timestamp);
             poolStatusUSDT.balance = reserveU;
@@ -623,6 +504,9 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
     }
 
     function updatePoolReserveSF() public {
+        if (!reservesInitialized) {
+            require(msg.sender == owner, "Only owner before initialization");
+        }
         if (block.timestamp >= poolStatusSF.timestamp + 1 hours) {
             poolStatusSF.timestamp = uint40(block.timestamp);
             (uint112 reserveSF, ) = getMyReserves(uniswapV2PairSF);
@@ -630,7 +514,8 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
         }
     }
 
-    function updatePoolReserveSF(uint112 reserveSF) private {   
+    function updatePoolReserveSF(uint112 reserveSF) private {
+        require(reservesInitialized, "reserves not initialized");
         if (block.timestamp >= poolStatusSF.timestamp + 1 hours) {
             poolStatusSF.timestamp = uint40(block.timestamp);
             poolStatusSF.balance = reserveSF;
@@ -639,7 +524,7 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
 
     function getReserveSF() external view returns (uint112) {
         return poolStatusSF.balance;
-    } 
+    }
 
     
     
@@ -702,12 +587,17 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
     }
 
     
-    function getSfAmountsOut(uint amountToken) public view returns (uint price) {
+    function getSfAmountsOut(
+        uint amountToken
+    ) public view returns (uint price) {
         address[] memory path = new address[](2);
         path[0] = address(this);
         path[1] = address(_SF);
-        
-        uint[] memory amountsOut = uniswapV2Router.getAmountsOut(amountToken, path);
+
+        uint[] memory amountsOut = uniswapV2Router.getAmountsOut(
+            amountToken,
+            path
+        );
         price = amountsOut[1];
     }
 
@@ -717,8 +607,11 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
         address[] memory path = new address[](2);
         path[0] = address(_SF);
         path[1] = address(_USDT);
-        
-        uint[] memory amountsOut = uniswapV2Router.getAmountsOut(sfAmount, path);
+
+        uint[] memory amountsOut = uniswapV2Router.getAmountsOut(
+            sfAmount,
+            path
+        );
         return amountsOut[1];
     }
 
@@ -727,9 +620,8 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
         address recipient,
         uint256 amount
     ) internal virtual override {
-        
         require(!isReward(sender), "sender in reward list");
-        
+
         if (
             inSwapAndLiquify ||
             _isExcludedFromFee[sender] ||
@@ -738,12 +630,12 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
             super._transfer(sender, recipient, amount);
             return;
         }
-        
+
         
         if (sender == uniswapV2PairUSDT || recipient == uniswapV2PairUSDT) {
             usdt_transfer(sender, recipient, amount);
             return;
-        } 
+        }
 
         
         if (sender == uniswapV2PairSF || recipient == uniswapV2PairSF) {
@@ -794,22 +686,21 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
                 super._transfer(sender, address(0xdead), burnFee);
             }
             
-            
+
             
             uint256 buyLPFee = (amount * 10) / 1000;
             totalAmountLPFeeUSDT += buyLPFee;
             super._transfer(sender, address(this), buyLPFee);
-            
+
             
             uint256 buyNodeFee = (amount * 10) / 1000;
             totalAmountNodeFee += buyNodeFee;
             super._transfer(sender, address(this), buyNodeFee);
 
             uint256 totalFees = burnFee + buyLPFee + buyNodeFee;
-            
+
             
             super._transfer(sender, recipient, amount - totalFees);
-            
         } else if (uniswapV2PairUSDT == recipient) {
             
             require(presale, "pre");
@@ -824,17 +715,19 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
             
             
             uint256 sellExtraFee = 0; 
-            if (launchedAtTimestamp > 0 && 
-                block.timestamp - launchedAtTimestamp <= 15 minutes) {
+            if (
+                launchedAtTimestamp > 0 &&
+                block.timestamp - launchedAtTimestamp <= 15 minutes
+            ) {
                 sellExtraFee = (amount * 50) / 1000; 
             }
-            
+
             uint256 sellLPFee = (amount * 10) / 1000; 
             uint256 sellNodeFee = (amount * 10) / 1000; 
-            
+
             
             uint256 sellTechFee = (amount * 10) / 1000;
-            
+
             
             int256 priceChangeBps = twapOracle.getPriceChangeBps();
             uint256 dynamicTechFee = 0;
@@ -843,19 +736,24 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
                 uint256 absPriceChange = uint256(-priceChangeBps); 
                 if (absPriceChange >= 1300) {
                     
-                    uint256 cappedPriceChange = absPriceChange > 3000 ? 3000 : absPriceChange;
+                    uint256 cappedPriceChange = absPriceChange > 3000
+                        ? 3000
+                        : absPriceChange;
                     
                     uint256 excessBps = cappedPriceChange - 1300;
                     
                     dynamicTechFee = (amount * excessBps) / 10000;
                 }
             }
-            
+
             
             sellTechFee = sellTechFee + dynamicTechFee;
 
-            uint256 baseFee = sellLPFee + sellNodeFee + sellTechFee + sellExtraFee;
-            
+            uint256 baseFee = sellLPFee +
+                sellNodeFee +
+                sellTechFee +
+                sellExtraFee;
+
             
             uint256 amountUOut = getUsdtAmountsOut(amount - baseFee);
             updatePoolReserveUSDT(reserveU);
@@ -878,24 +776,24 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
                 profitFee = (amount * 100) / 1000;
                 tOwnedU[sender] = 0;
             }
-            
+
             
             uint256 totalFee = baseFee + profitFee;
-            
+
             
             super._transfer(sender, address(this), totalFee);
             
             totalAmountLPFeeUSDT += sellLPFee;
             totalAmountNodeFee += sellNodeFee;
             totalAmountTechFee += sellTechFee;
-            
+
             
             if (profitFee > 0) {
                 if (shouldSwapProfit(profitFee)) {
                     swapProfit(profitFee, sender);
                 }
             }
-            
+
             
             if (sellExtraFee > 0) {
                 if (shouldSwapProfit(sellExtraFee)) {
@@ -904,14 +802,19 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
             }
 
             
-            if (shouldSwapTokenForFund(totalAmountLPFeeUSDT + totalAmountNodeFee + totalAmountTechFee)) {
+            if (
+                shouldSwapTokenForFund(
+                    totalAmountLPFeeUSDT +
+                        totalAmountNodeFee +
+                        totalAmountTechFee
+                )
+            ) {
                 swapTokenForFund();
             }
 
             
             uint256 finalAmount = amount - totalFee;
             super._transfer(sender, recipient, finalAmount);
-    
         } else {
             
         }
@@ -965,12 +868,12 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
                 super._transfer(sender, address(0xdead), burnFee);
             }
             
-            
+
             
             uint256 LPFee = (amount * 10) / 1000;
             totalAmountLPFeeSF += LPFee;
             super._transfer(sender, address(this), LPFee);
-            
+
             
             uint256 nodeFee = (amount * 10) / 1000;
             totalAmountNodeFee += nodeFee;
@@ -980,11 +883,10 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
 
             
             super._transfer(sender, recipient, amount - totalFees);
-
         } else if (uniswapV2PairSF == recipient) {
             
             require(presale, "pre");
-            
+
             
             require(block.timestamp >= lastBuyTime[sender] + coldTime, "cold");
             (uint112 reserveSF, uint112 reserveThis) = getMyReserves(
@@ -992,52 +894,62 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
             );
 
             require(amount <= reserveThis / 10, "max sell cap");
-            
+
             
             
             uint256 sellExtraFee = 0; 
-            if (launchedAtTimestamp > 0 && 
-                block.timestamp - launchedAtTimestamp <= 15 minutes) {
+            if (
+                launchedAtTimestamp > 0 &&
+                block.timestamp - launchedAtTimestamp <= 15 minutes
+            ) {
                 sellExtraFee = (amount * 50) / 1000; 
             }
-            
+
             uint256 sellLPFee = (amount * 10) / 1000; 
             uint256 sellNodeFee = (amount * 10) / 1000; 
-            
+
             
             uint256 sellTechFee = (amount * 10) / 1000;
-            
+
             
             int256 priceChangeBps = twapOracle.getPriceChangeBps();
             uint256 dynamicTechFee = 0;
             
             if (priceChangeBps < 0) {
                 
-                require(priceChangeBps > type(int256).min, "Price change overflow");
+                require(
+                    priceChangeBps > type(int256).min,
+                    "Price change overflow"
+                );
                 uint256 absPriceChange = uint256(-priceChangeBps); 
                 if (absPriceChange >= 1300) {
                     
-                    uint256 cappedPriceChange = absPriceChange > 3000 ? 3000 : absPriceChange;
+                    uint256 cappedPriceChange = absPriceChange > 3000
+                        ? 3000
+                        : absPriceChange;
                     
                     uint256 excessBps = cappedPriceChange - 1300;
                     
                     dynamicTechFee = (amount * excessBps) / 10000;
                 }
             }
-            
+
             
             sellTechFee = sellTechFee + dynamicTechFee;
 
-            uint256 baseFee = sellLPFee + sellNodeFee + sellTechFee + sellExtraFee;
+            uint256 baseFee = sellLPFee +
+                sellNodeFee +
+                sellTechFee +
+                sellExtraFee;
 
             
             uint256 amountUOut = getUsdtAmountsOut(amount - baseFee);
-            
+
             updatePoolReserveSF(reserveSF);
 
             
             uint256 profitFee = 0;
-            
+
             if (tOwnedU[sender] >= amountUOut) {
                 
                 unchecked {
@@ -1054,10 +966,10 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
                 profitFee = (amount * 100) / 1000;
                 tOwnedU[sender] = 0;
             }
-            
+
             
             uint256 totalFee = baseFee + profitFee;
-       
+
             
             totalAmountLPFeeSF += sellLPFee;
             totalAmountNodeFee += sellNodeFee;
@@ -1072,19 +984,23 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
                     swapProfit(profitFee, sender);
                 }
             }
-            
+
             
             if (sellExtraFee > 0) {
                 if (shouldSwapProfit(sellExtraFee)) {
                     swapProfit(sellExtraFee, sender);
                 }
             }
+
             
-            
-            if (shouldSwapTokenForFund(totalAmountLPFeeSF + totalAmountNodeFee + totalAmountTechFee)) {
+            if (
+                shouldSwapTokenForFund(
+                    totalAmountLPFeeSF + totalAmountNodeFee + totalAmountTechFee
+                )
+            ) {
                 swapTokenForFund();
             }
-            
+
             
             uint256 finalAmount = amount - totalFee;
             super._transfer(sender, recipient, finalAmount);
@@ -1112,13 +1028,13 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
             swapAndLiquifySF(totalAmountLPFeeSF);
             totalAmountLPFeeSF = 0;
         }
-        
+
         
         if (totalAmountNodeFee > 0) {
             swapTokenForUsdt(totalAmountNodeFee, NFTNodeAddress);
             totalAmountNodeFee = 0;
         }
-        
+
         
         if (totalAmountTechFee > 0) {
             swapTokenForUsdt(totalAmountTechFee, techAddress);
@@ -1136,26 +1052,30 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
     ) internal lockTheSwap {
         uint256 balance = 0;
         uint256 contractBalance = balanceOf(address(this));
-        uint256 reservedAmount = totalAmountLPFeeUSDT + totalAmountLPFeeSF + totalAmountNodeFee + totalAmountTechFee;
-        
+        uint256 reservedAmount = totalAmountLPFeeUSDT +
+            totalAmountLPFeeSF +
+            totalAmountNodeFee +
+            totalAmountTechFee;
+
         if (contractBalance > reservedAmount) {
             balance = contractBalance - reservedAmount;
         }
-        
+
         if (balance == 0) {
             return;
         }
-        
+
         uint256 t2 = tokenAmount;
         uint256 amountIn = t2 >= balance ? balance : t2;
-        
+
         unchecked {
             uint256 amount0 = IERC20(_USDT).balanceOf(address(distributor));
-            
+
             swapTokenForUsdt(amountIn, address(distributor));
-            
-            uint256 amount = IERC20(_USDT).balanceOf(address(distributor)) - amount0;
-            
+
+            uint256 amount = IERC20(_USDT).balanceOf(address(distributor)) -
+                amount0;
+
             
             IERC20(_USDT).transferFrom(
                 address(distributor),
@@ -1186,7 +1106,7 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
         address[] memory path = new address[](2);
         path[0] = address(this);
         path[1] = address(_SF);
-        
+
         uint256 sfAmount = getSfAmountsOut(tokenAmount);
         uniswapV2Router.swapExactTokensForTokensSupportingFeeOnTransferTokens(
             tokenAmount,
@@ -1228,7 +1148,10 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
     
     
     
-    function addLiquidityUSDT(uint256 tokenAmount, uint256 usdtAmount) internal {
+    function addLiquidityUSDT(
+        uint256 tokenAmount,
+        uint256 usdtAmount
+    ) internal {
         uint256 amountTokenMin = (tokenAmount * 95) / 100;
         uint256 amountUsdtMin = (usdtAmount * 95) / 100;
         uniswapV2Router.addLiquidity(
@@ -1291,10 +1214,13 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
         address[] memory path = new address[](2);
         path[0] = address(_SF);
         path[1] = address(_USDT);
-        
-        uint[] memory amountsOut = uniswapV2Router.getAmountsOut(sfAmount, path);
+
+        uint[] memory amountsOut = uniswapV2Router.getAmountsOut(
+            sfAmount,
+            path
+        );
         uint256 expectedUsdt = amountsOut[1];
-        
+
         uniswapV2Router.swapExactTokensForTokensSupportingFeeOnTransferTokens(
             sfAmount,
             (expectedUsdt * 55) / 100,
@@ -1312,7 +1238,7 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
     
     
     
-    
+
     function recycleUSDT(uint256 amount) external {
         require(STAKING == msg.sender, "cycle");
         uint256 maxBurn = balanceOf(uniswapV2PairUSDT) / 3;
@@ -1328,13 +1254,24 @@ contract SFK is ExcludedFromFeeList, BaseDEX, FirstLaunch, ERC20 {
         super._transfer(uniswapV2PairSF, STAKING, burnAmount);
         IUniswapV2Pair(uniswapV2PairSF).sync();
     }
+
     
 
     function setPresale() external onlyOwner {
         presale = true;
         launch();
-        updatePoolReserveUSDT();
-        updatePoolReserveSF();
+        
+        
+        
+        poolStatusUSDT.timestamp = uint40(block.timestamp);
+        (uint112 reserveU, ) = getMyReserves(uniswapV2PairUSDT);
+        poolStatusUSDT.balance = reserveU;
+
+        poolStatusSF.timestamp = uint40(block.timestamp);
+        (uint112 reserveSF, ) = getMyReserves(uniswapV2PairSF);
+        poolStatusSF.balance = reserveSF;
+
+        reservesInitialized = true;
     }
 
     function setColdTime(uint40 _coldTime) external onlyOwner {

@@ -191,7 +191,7 @@ abstract contract ReentrancyGuard {
 
 address constant _USDT = 0xC6961C826cAdAC9b85F444416D3bf0Ca2a1c38CA;
 address constant _SF = 0x9af8d66Fc14beC856896771fD7D2DB12b41ED9E8;
-address constant _SFK = 0xb362f8372cE0EF2265E9988292d17abfEB96473f;
+address constant _SFK = 0x33DaBa07D8b1025eE4a7Af0609722797ab70FE7d;
 address constant _ROUTER = 0xD99D1c33F9fC3444f8101754aBC46c52416550D1;
 address constant FUND_ADDRESS = 0xf3A51876c0Fb4FA7F99A62E3D6CF7d0574Aeb60d;
 
@@ -270,18 +270,24 @@ interface ISFExchange {
 abstract contract Owned {
 
     event OwnershipTransferred(address indexed user, address indexed newOwner);
+
     address public owner;
 
     modifier onlyOwner() virtual {
         require(msg.sender == owner, "UNAUTHORIZED");
+
         _;
     }
+
     constructor(address _owner) {
         owner = _owner;
+
         emit OwnershipTransferred(address(0), _owner);
     }
+
     function transferOwnership(address newOwner) public virtual onlyOwner {
         owner = newOwner;
+
         emit OwnershipTransferred(msg.sender, newOwner);
     }
 }
