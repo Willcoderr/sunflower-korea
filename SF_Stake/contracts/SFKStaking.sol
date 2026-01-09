@@ -1,6 +1,5 @@
 pragma solidity >=0.8.20 <0.8.25;
 
-[dotenv@17.2.3] injecting env (0) from .env -- tip: 🔑 add access controls to secrets: https:
 
 interface IUniswapV2Router01 {
     function factory() external pure returns (address);
@@ -294,32 +293,6 @@ interface ISFErc20 {
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
 }
 
-interface ISFExchange {
-
-    event ExchangeUSDTForSF(address indexed user, uint256 usdtAmount, uint256 sfAmount);
-    event ExchangeSFForUSDT(address indexed user, uint256 sfAmount, uint256 usdtAmount);
-    event WhitelistDeposit(address indexed from, uint256 sfAmount, uint256 usdtAmount);
-    event StakingContractUpdated(address indexed oldContract, address indexed newContract);
-    event ReserveThresholdUpdated(uint256 minSFReserve, uint256 minUSDTReserve);
-    event SfSwapAddressUpdated(address indexed oldAddress, address indexed newAddress);
-    event UsdtSwapAddressUpdated(address indexed oldAddress, address indexed newAddress);
-
-    function exchangeUSDTForSF(uint256 usdtAmount) external returns (uint256 sfAmount);
-    function exchangeSFForUSDT(uint256 sfAmount) external returns (uint256 usdtAmount);
-    function depositFromWhitelist(uint256 sfAmount, uint256 usdtAmount) external;
-    function setStakingContract(address _stakingContract) external;
-    function setReserveThresholds(uint256 _minSFReserve, uint256 _minUSDTReserve) external;
-    function emergencyWithdraw(address token, uint256 amount, address to) external;
-    function calculateSFAmount(uint256 usdtAmount) external view returns (uint256);
-    function calculateUSDTAmount(uint256 sfAmount) external view returns (uint256);
-    function getReserveStatus() external view returns (
-        uint256 sfBalance,
-        uint256 usdtBalance,
-        bool sfSufficient,
-        bool usdtSufficient
-    );
-}
-
 interface ISFK {
     event ExcludedFromFee(address account);
     event IncludedToFee(address account);
@@ -563,6 +536,24 @@ contract Staking is Referral, Owned, ReentrancyGuard {
         uint256 index
     );
 
+    event SFPriceGapDetected(
+        uint256 priceMain,
+        uint256 priceSide,
+        uint256 gapBps,
+        uint256 timestamp
+    );
+
+    event SFKPriceGapDetected(
+        uint256 priceUSDT,
+        uint256 priceSF,
+        uint256 gapBps,
+        uint256 timestamp
+    );
+
+    event StakeCompleted(address indexed user, uint256 amount, uint256 sfAmount);
+
+    event UnstakeCompleted(address indexed user, uint256 amount, uint256 sfkUsed);
+
     uint256[3] rates = [
         1002999999999999872,
         1006000000000000000,
@@ -578,8 +569,9 @@ contract Staking is Referral, Owned, ReentrancyGuard {
     ISFErc20 public SF;
     ISFK public SFK;
 
-    ISFExchange public sfExchange;
     IStakingReward public stakingReward;
+
+    uint256 public priceGapThreshold = 50;
 
     address constant addressProfitUser =
         0x5E77DEEe08b98881fdd4eDB3642fEAB78C443C42;
@@ -657,24 +649,18 @@ contract Staking is Referral, Owned, ReentrancyGuard {
         SFK.approve(address(ROUTER), type(uint256).max);
     }
 
-    function setSFExchange(address _sfExchange) external onlyOwner {
-        require(_sfExchange != address(0), "Invalid address");
-        sfExchange = ISFExchange(_sfExchange);
-        USDT.approve(_sfExchange, type(uint256).max);
-        SF.approve(_sfExchange, type(uint256).max);
-    }
-
     function setStakingReward(address _stakingReward) external onlyOwner {
         require(_stakingReward != address(0), "Invalid address");
         stakingReward = IStakingReward(_stakingReward);
     }
 
-    function getNowTIme() external view returns (uint256) {
-        return block.timestamp;
+    function setPriceGapThreshold(uint256 threshold) external onlyOwner {
+        require(threshold > 0 && threshold <= 1000, "Threshold must be 0-1000 bps");
+        priceGapThreshold = threshold;
     }
 
-    function setEoaWithdrawAddress(address _eoaAddress) external onlyOwner {
-        eoaWithdrawAddress = _eoaAddress;
+    function getNowTIme() external view returns (uint256) {
+        return block.timestamp;
     }
 
     function getParameters(
@@ -1065,31 +1051,99 @@ contract Staking is Referral, Owned, ReentrancyGuard {
     }
 
     function swapAndAddLiquidity(uint160 _amount) private {
-        require(address(sfExchange) != address(0), "SFExchange not set");
-
         USDT.transferFrom(msg.sender, address(this), _amount);
 
-        uint256 halfAmount = _amount / 2;
+        uint256 reserveUSDT = _amount / 4;
+        uint256 toBuySFK = _amount - reserveUSDT;
 
-        uint256 usdtForSwap = halfAmount / 2;
+        uint256 sfkAmount = swapUsdtForSFK(toBuySFK, address(this));
 
-        uint256 usdtForLiquidity = halfAmount / 2;
+        uint256 sfkForSF = sfkAmount / 3;
+        uint256 sfAmount = swapSFKForSF(sfkForSF, address(this));
 
-        uint256 sfkAmount1 = swapUsdtForSFK(usdtForSwap, address(this));
+        uint256 remainingSFK = sfkAmount - sfkForSF;
+        uint256 sfkForLP1 = remainingSFK / 2;
+        uint256 sfkForLP2 = remainingSFK - sfkForLP1;
 
-        addLiquidityUSDTSFK(usdtForLiquidity, sfkAmount1, address(0xdead));
+        addLiquiditySFSFK(sfAmount, sfkForLP1, address(0xdead));
 
-        USDT.approve(address(sfExchange), halfAmount);
-        uint256 actualSF = sfExchange.exchangeUSDTForSF(halfAmount);
+        addLiquidityUSDTSFK(reserveUSDT, sfkForLP2, address(0xdead));
 
-        uint256 sfForSwap = actualSF / 2;
-        uint256 sfForLiquidity = actualSF / 2;
+        emit StakeCompleted(msg.sender, _amount, sfAmount);
 
-        SF.approve(address(ROUTER), sfForSwap);
+        _checkSFPriceGap();
+    }
 
-        uint256 sfkAmount = swapSFForSFK(sfForSwap, address(this));
+    function _checkSFPriceGap() private {
+        uint256 priceMain = getSFPriceInMainPool();
+        uint256 priceSide = getSFPriceInSidePool();
 
-        addLiquiditySFSFK(sfForLiquidity, sfkAmount, address(0xdead));
+        if (priceSide > priceMain) {
+            uint256 gapBps = ((priceSide - priceMain) * 10000) / priceMain;
+
+            if (gapBps >= priceGapThreshold) {
+                emit SFPriceGapDetected(priceMain, priceSide, gapBps, block.timestamp);
+            }
+        }
+    }
+
+    function _checkSFKPriceGap() private {
+        uint256 priceUSDT = getSFKPriceInUSDTPool();
+        uint256 priceSF = getSFKPriceInSFPool();
+
+        if (priceSF > priceUSDT) {
+            uint256 gapBps = ((priceSF - priceUSDT) * 10000) / priceUSDT;
+
+            if (gapBps >= priceGapThreshold) {
+                emit SFKPriceGapDetected(priceUSDT, priceSF, gapBps, block.timestamp);
+            }
+        }
+    }
+
+    function getSFPriceInMainPool() public view returns (uint256) {
+        address[] memory path = new address[](2);
+        path[0] = address(SF);
+        path[1] = address(USDT);
+
+        uint256[] memory amounts = ROUTER.getAmountsOut(1e18, path);
+        return amounts[1];
+    }
+
+    function getSFPriceInSidePool() public view returns (uint256) {
+        address[] memory path1 = new address[](2);
+        path1[0] = address(SF);
+        path1[1] = address(SFK);
+        uint256[] memory amounts1 = ROUTER.getAmountsOut(1e18, path1);
+        uint256 sfkAmount = amounts1[1];
+
+        address[] memory path2 = new address[](2);
+        path2[0] = address(SFK);
+        path2[1] = address(USDT);
+        uint256[] memory amounts2 = ROUTER.getAmountsOut(sfkAmount, path2);
+        return amounts2[1];
+    }
+
+    function getSFKPriceInUSDTPool() public view returns (uint256) {
+        address[] memory path = new address[](2);
+        path[0] = address(SFK);
+        path[1] = address(USDT);
+
+        uint256[] memory amounts = ROUTER.getAmountsOut(1e18, path);
+        return amounts[1];
+    }
+
+    function getSFKPriceInSFPool() public view returns (uint256) {
+        address[] memory path1 = new address[](2);
+        path1[0] = address(SFK);
+        path1[1] = address(SF);
+        uint256[] memory amounts1 = ROUTER.getAmountsOut(1e18, path1);
+        uint256 sfAmount = amounts1[1];
+
+        address[] memory path2 = new address[](2);
+        path2[0] = address(SF);
+        path2[1] = address(USDT);
+        uint256[] memory amounts2 = ROUTER.getAmountsOut(sfAmount, path2);
+        return amounts2[1];
     }
 
     function swapSFKForSF(
@@ -1134,39 +1188,6 @@ contract Staking is Referral, Owned, ReentrancyGuard {
         );
         uint256 usdtAfter = USDT.balanceOf(to);
         return usdtAfter - usdtBefore;
-    }
-
-    function swapSFForSFK(
-        uint256 sfAmount,
-        address to
-    ) private returns (uint256) {
-        uint256 sfkBefore = SFK.balanceOf(to);
-
-        address[] memory path = new address[](2);
-        path[0] = address(SF);
-        path[1] = address(SFK);
-
-        SF.approve(address(ROUTER), type(uint256).max);
-        ROUTER.swapExactTokensForTokensSupportingFeeOnTransferTokens(
-            sfAmount,
-            0,
-            path,
-            to,
-            block.timestamp
-        );
-        uint256 sfkAfter = SFK.balanceOf(to);
-        return sfkAfter - sfkBefore;
-    }
-
-    function calculateRequiredSF(
-        uint256 usdtAmount
-    ) public view returns (uint256) {
-        address[] memory path = new address[](2);
-        path[0] = address(USDT);
-        path[1] = address(SF);
-
-        uint[] memory amounts = ROUTER.getAmountsOut(usdtAmount, path);
-        return amounts[1];
     }
 
     function swapUsdtForSFK(
@@ -1331,170 +1352,114 @@ contract Staking is Referral, Owned, ReentrancyGuard {
         uint256 reward;
         uint256 stake;
         uint256 sfkBefore;
-        uint256 usdtBefore;
-        uint256 sfBefore;
         uint256 totalUsdtValue;
-        uint256 halfUsdtValue;
-        uint256 usdtFromPool1;
-        uint256 sfFromPool2;
-        uint256 usdtFromExchange;
         uint256 totalUsdtForUser;
         uint256 principalUsdt;
         uint256 profitUsdt;
-        uint256 actualSFK1Used;
-        uint256 actualSFK2Used;
     }
 
-    function unstake(
-        uint256 index
-    ) external onlyEOA nonReentrant returns (uint256) {
-        Vars memory v;
-        (v.reward, v.stake) = burn(index);
+function unstake(
+    uint256 index
+) external onlyEOA nonReentrant returns (uint256) {
+    Vars memory v;
+    (v.reward, v.stake) = burn(index);
 
-        v.sfkBefore = SFK.balanceOf(address(this));
-        v.usdtBefore = USDT.balanceOf(address(this));
-        v.sfBefore = SF.balanceOf(address(this));
+    v.sfkBefore = SFK.balanceOf(address(this));
+    v.totalUsdtValue = v.reward;
+    v.principalUsdt = v.stake;
+    v.profitUsdt = v.reward > v.principalUsdt ? v.reward - v.principalUsdt : 0;
 
-        v.totalUsdtValue = v.reward;
-        v.halfUsdtValue = v.totalUsdtValue / 2;
+    address[] memory path = new address[](2);
+    path[0] = address(SFK);
+    path[1] = address(USDT);
+    uint256[] memory amountsIn = ROUTER.getAmountsIn(v.totalUsdtValue, path);
+    uint256 sfkNeeded = amountsIn[0];
 
-        address[] memory pathUsdt = new address[](2);
-        pathUsdt[0] = address(SFK);
-        pathUsdt[1] = address(USDT);
-        uint256[] memory amountsInUsdt = ROUTER.getAmountsIn(
-            v.halfUsdtValue,
-            pathUsdt
-        );
-        uint256 requiredSFK1 = amountsInUsdt[0];
+    require(v.sfkBefore >= sfkNeeded, "Insufficient SFK balance");
 
-        require(
-            v.sfkBefore >= requiredSFK1,
-            "Insufficient SFK balance for USDT pool"
-        );
+    v.totalUsdtForUser = swapSFKForUSDT(sfkNeeded, address(this));
 
-        uint256 sfkBeforeSwap1 = SFK.balanceOf(address(this));
+    uint256 totalUserAmount = _distributeUnstakeRewards(
+        v.profitUsdt,
+        v.principalUsdt,
+        v.totalUsdtForUser,
+        index
+    );
 
-        v.usdtFromPool1 = swapSFKForUSDT(requiredSFK1, address(this));
+    USDT.transfer(msg.sender, totalUserAmount);
 
-        v.actualSFK1Used = sfkBeforeSwap1 - SFK.balanceOf(address(this));
+    SFK.recycleUSDT(sfkNeeded);
 
-        uint256 requiredSF = sfExchange.calculateSFAmount(v.halfUsdtValue);
+    emit UnstakeCompleted(msg.sender, totalUserAmount, sfkNeeded);
+    emit Unstake(msg.sender, v.reward, uint40(block.timestamp), index);
 
-        uint256 requiredSFWithBuffer = (requiredSF * 101) / 100;
+    _checkSFKPriceGap();
 
-        address[] memory pathSfkToSf = new address[](2);
-        pathSfkToSf[0] = address(SFK);
-        pathSfkToSf[1] = address(SF);
-        uint256[] memory amountsInSfkToSf = ROUTER.getAmountsIn(
-            requiredSFWithBuffer,
-            pathSfkToSf
-        );
-        uint256 requiredSFK2 = amountsInSfkToSf[0];
+    return v.reward;
+}
 
-        require(
-            v.sfkBefore >= requiredSFK1 + requiredSFK2,
-            "Insufficient SFK balance for SF pool"
-        );
-
-        v.sfFromPool2 = swapSFKForSF(requiredSFK2, address(this));
-        v.actualSFK2Used = requiredSFK2;
-
-        SF.approve(address(sfExchange), type(uint256).max);
-        if (v.sfFromPool2 >= requiredSF) {
-            v.usdtFromExchange = sfExchange.exchangeSFForUSDT(v.sfFromPool2);
-
-        } else {
-            v.usdtFromExchange = sfExchange.exchangeSFForUSDT(v.sfFromPool2);
+function _distributeUnstakeRewards(
+    uint256 profitUsdt,
+    uint256 principalUsdt,
+    uint256 totalUsdtForUser,
+    uint256 index
+) private returns (uint256 totalUserAmount) {
+    uint256 taxAmount = 0;
+    if (profitUsdt > 0) {
+        taxAmount = (profitUsdt * 5) / 100;
+        if (taxAmount > 0) {
+            USDT.transfer(profitAddress, taxAmount);
         }
+    }
 
-        v.totalUsdtForUser = v.usdtFromPool1 + v.usdtFromExchange;
+    uint256 profitAfterTax = profitUsdt - taxAmount;
+    uint256 profitUserUsdt = (profitAfterTax * 70) / 100;
+    totalUserAmount = principalUsdt + profitUserUsdt;
 
-        v.principalUsdt = v.stake;
-
-        v.profitUsdt = 0;
-        if (v.totalUsdtForUser > v.principalUsdt) {
-            v.profitUsdt = v.reward - v.principalUsdt; 
+    if (profitAfterTax > 0) {
+        uint256 levelProfitAmount = (profitAfterTax * 2) / 100;
+        if (levelProfitAmount > 0) {
+            USDT.transfer(addressLevelProfit, levelProfitAmount);
         }
+    }
 
-        uint256 taxAmount = 0;
-        if (v.profitUsdt > 0) {
-            taxAmount = (v.profitUsdt * 5) / 100;
-            if (taxAmount > 0) {
-                USDT.transfer(profitAddress, taxAmount);
-            }
-        }
+    if (address(stakingReward) != address(0) && profitAfterTax > 0) {
+        uint256 reservedAmount = (profitAfterTax * 28) / 100;
+        uint256 levelAmount = (profitAfterTax * 2) / 100;
 
-        uint256 profitAfterTax = v.profitUsdt - taxAmount;
+        if (
+            reservedAmount > 0 &&
+            totalUsdtForUser >= totalUserAmount + reservedAmount + taxAmount + levelAmount
+        ) {
+            bytes32 settlementId = keccak256(
+                abi.encodePacked(
+                    block.chainid,
+                    address(this),
+                    msg.sender,
+                    index,
+                    userIndex[msg.sender],
+                    block.number
+                )
+            );
 
-        uint256 profitUserUsdt = (profitAfterTax * 70) / 100;
-        uint256 totalUserAmount = v.principalUsdt + profitUserUsdt;
+            USDT.transfer(address(stakingReward), reservedAmount);
+            stakingReward.emitUnstakePerformanceUpdate(msg.sender, principalUsdt);
 
-        uint256 levelProfitAmount = 0;
-        if (profitAfterTax > 0) {
-            levelProfitAmount = (profitAfterTax * 2) / 100;
-            if (levelProfitAmount > 0) {
-                USDT.transfer(addressLevelProfit, levelProfitAmount);
-            }
-        }
-
-        uint256 reservedAmount = 0;
-        bytes32 settlementId = bytes32(0);
-
-        if (address(stakingReward) != address(0) && profitAfterTax > 0) {
-            reservedAmount = (profitAfterTax * 28) / 100;
-            if (
-                reservedAmount > 0 &&
-                v.totalUsdtForUser >=
-                totalUserAmount + reservedAmount + taxAmount + levelProfitAmount
-            ) {
-                settlementId = keccak256(
-                    abi.encodePacked(
-                        block.chainid,
-                        address(this),
-                        msg.sender,
-                        index,
-                        userIndex[msg.sender],
-                        block.number
-                    )
-                );
-                USDT.transfer(address(stakingReward), reservedAmount);
-            }
-        }
-
-        if (address(stakingReward) != address(0)) {
-            stakingReward.emitUnstakePerformanceUpdate(msg.sender, v.stake);
-        }
-
-        USDT.transfer(msg.sender, totalUserAmount);
-
-        SFK.recycleUSDT(v.actualSFK1Used);
-        SFK.recycleSF(v.actualSFK2Used);
-
-        if (settlementId != bytes32(0)) {
             emit ProfitPending(
                 msg.sender,
                 settlementId,
                 profitUserUsdt,
                 reservedAmount,
-                v.profitUsdt,
-                v.principalUsdt,
+                profitUsdt,
+                principalUsdt,
                 uint40(block.timestamp),
                 index
             );
         }
-
-        emit UnstakeSFToWhitelist(
-            msg.sender,
-            v.sfFromPool2,
-            v.halfUsdtValue,
-            v.usdtFromExchange,
-            uint40(block.timestamp)
-        );
-
-        emit Unstake(msg.sender, v.reward, uint40(block.timestamp), index);
-
-        return v.reward;
     }
+
+    return totalUserAmount;
+}
 
     function burn(
         uint256 index

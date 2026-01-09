@@ -1,6 +1,5 @@
 pragma solidity >=0.8.20 <0.8.25;
 
-[dotenv@17.2.3] injecting env (0) from .env -- tip: 🗂️ backup and recover secrets: https:
 
 interface IERC5267 {
     event EIP712DomainChanged();
@@ -1879,14 +1878,4 @@ contract StakingReward is Owned, ReentrancyGuard, EIP712 {
         }
     }
 
-    function updateUserLevel(
-        address user,
-        uint256 level,
-        uint256 dept1Level,
-        uint256 dept2Level
-    ) external onlyOwner {
-        teamLevel[user] = level;
-        departmentLevel[user][0] = dept1Level;
-        departmentLevel[user][1] = dept2Level;
-    }
 }
